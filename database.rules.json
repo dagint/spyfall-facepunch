@@ -1,0 +1,53 @@
+{
+  "rules": {
+    "rooms": {
+      "$roomCode": {
+        ".read": "auth != null && (data.child('players').child(auth.uid).exists() || !data.child('host').exists())",
+        ".write": "auth != null",
+
+        "host": {
+          ".write": "auth != null && (!data.exists() || data.val() === auth.uid)"
+        },
+
+        "settings": {
+          ".write": "auth != null && data.parent().child('host').val() === auth.uid"
+        },
+
+        "phase": {
+          ".write": "auth != null && data.parent().child('host').val() === auth.uid"
+        },
+
+        "players": {
+          "$uid": {
+            ".write": "auth != null && ($uid === auth.uid || data.parent().parent().child('host').val() === auth.uid)"
+          }
+        },
+
+        "customLocations": {
+          ".write": "auth != null && data.parent().child('host').val() === auth.uid"
+        },
+
+        "game": {
+          ".write": "auth != null && data.parent().child('host').val() === auth.uid",
+
+          "votes": {
+            "$uid": {
+              ".write": "auth != null && $uid === auth.uid"
+            }
+          },
+
+          "spyGuess": {
+            ".write": "auth != null && (data.parent().child('spyId').val() === auth.uid || data.parent().child('spyIds').child(auth.uid).val() === true)"
+          },
+
+          "events": {
+            ".write": "auth != null",
+            "$eventId": {
+              ".write": "auth != null"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Auto-bump patch version on every commit
+# To skip: git commit --no-verify (not recommended)
+
+# Only bump if package.json is NOT already staged (avoids infinite loop)
+if git diff --cached --name-only | grep -q "^package.json$"; then
+  # package.json already staged — likely a manual version bump, skip auto-bump
+  exit 0
+fi
+
+bash scripts/bump-version.sh

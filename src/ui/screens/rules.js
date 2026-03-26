@@ -1,0 +1,92 @@
+import { el, renderHeader } from '../components.js';
+import { navigate } from '../../router.js';
+import { LOCATIONS } from '../../data/locations.js';
+
+export function renderRules(container) {
+  renderHeader(container, 'HOW TO PLAY', () => navigate('home'));
+
+  const content = el('div', 'space-y-6 pb-8');
+  content.innerHTML = `
+    <section class="card">
+      <h2 class="text-lg font-bold text-cyan-400 mb-3">Overview</h2>
+      <p class="text-sm text-slate-300 leading-relaxed">
+        Spyfall is a social deduction game for <strong>3-8+ players</strong>. Everyone is assigned a secret
+        location and a role — except one player, <strong>the Spy</strong>, who doesn't know where they are.
+      </p>
+      <p class="text-sm text-slate-300 leading-relaxed mt-2">
+        Players take turns asking each other questions to figure out who the Spy is, while the Spy tries
+        to blend in and deduce the location.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2 class="text-lg font-bold text-cyan-400 mb-3">Setup</h2>
+      <ol class="text-sm text-slate-300 space-y-2 list-decimal list-inside">
+        <li>One player creates a room and shares the 4-letter code</li>
+        <li>Other players join using the code</li>
+        <li>The host configures the timer (3-12 minutes) and location pack</li>
+        <li>The host starts the game when 3+ players are ready</li>
+        <li>Each player secretly sees their role card — or learns they're the Spy</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2 class="text-lg font-bold text-cyan-400 mb-3">Gameplay</h2>
+      <p class="text-sm text-slate-300 leading-relaxed mb-3">
+        Players ask each other questions in turns (verbally, in person or over voice chat).
+        Questions should be vague enough to not reveal the location to the spy, but specific enough
+        to prove you know where you are.
+      </p>
+      <div class="bg-slate-700/50 rounded-lg p-4 text-sm">
+        <div class="font-semibold text-slate-200 mb-2">Example Questions:</div>
+        <ul class="text-slate-400 space-y-1">
+          <li>"How did you get here today?"</li>
+          <li>"What are you wearing for the occasion?"</li>
+          <li>"How long have you been doing this kind of work?"</li>
+          <li>"What's the dress code like?"</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="text-lg font-bold text-cyan-400 mb-3">Winning</h2>
+      <div class="space-y-3 text-sm text-slate-300">
+        <div class="flex gap-3">
+          <span class="text-emerald-400 font-bold shrink-0">Players win if:</span>
+          <span>They vote out the Spy (majority vote), or the Spy guesses the wrong location</span>
+        </div>
+        <div class="flex gap-3">
+          <span class="text-rose-400 font-bold shrink-0">Spy wins if:</span>
+          <span>They correctly guess the location, an innocent player gets voted out, or time runs out</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="text-lg font-bold text-cyan-400 mb-3">Pro Tips for Security Pros</h2>
+      <ul class="text-sm text-slate-300 space-y-2">
+        <li><strong class="text-amber-400">As a regular player:</strong> Give answers that are specific enough to prove knowledge but vague enough that the Spy can't identify the location. Think "need-to-know basis."</li>
+        <li><strong class="text-amber-400">As the Spy:</strong> Use your social engineering skills. Mirror others' confidence level. Ask questions that work for multiple locations. Don't be the first to answer in detail.</li>
+        <li><strong class="text-amber-400">Reading the room:</strong> Watch for micro-expressions, hesitation, and overly generic answers. The same threat detection skills you use in incident response work here.</li>
+        <li><strong class="text-amber-400">Meta-strategy:</strong> Experienced players can cross off impossible locations based on others' answers. Use the location reference grid to narrow it down.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2 class="text-lg font-bold text-cyan-400 mb-3">Location Reference</h2>
+      <p class="text-sm text-slate-400 mb-3">
+        The game includes ${LOCATIONS.length} locations across Classic and Tech/Security packs:
+      </p>
+      <div class="grid grid-cols-2 gap-2">
+        ${LOCATIONS.map((loc) => `
+          <div class="text-xs px-3 py-2 rounded-md bg-slate-700/50 text-slate-300 border border-slate-600/50">
+            <span>${loc.name}</span>
+            <span class="text-slate-500 ml-1">${loc.pack === 'tech' ? '[Tech]' : ''}</span>
+          </div>
+        `).join('')}
+      </div>
+    </section>
+  `;
+
+  container.appendChild(content);
+}

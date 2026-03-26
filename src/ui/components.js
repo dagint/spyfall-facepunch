@@ -1,0 +1,288 @@
+import { formatTime } from '../utils/timer.js';
+import { getRandomPrompts } from '../data/prompts.js';
+import { isMuted, setMuted, play } from '../audio/sounds.js';
+
+/** Sanitize a string for safe insertion into innerHTML */
+export function sanitize(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Create an element with optional classes and text */
+export function el(tag, className = '', textContent = '') {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (textContent) element.textContent = textContent;
+  return element;
+}
+
+/** Render a header with back button */
+export function renderHeader(container, title, onBack = null) {
+  const header = el('div', 'flex items-center gap-3 mb-6');
+
+  if (onBack) {
+    const backBtn = el('button', 'btn-secondary !px-3 !py-2 text-xs', 'Back');
+    backBtn.addEventListener('click', onBack);
+    header.appendChild(backBtn);
+  }
+
+  const h1 = el('h1', 'text-xl font-bold text-cyan-400 font-mono', title);
+  header.appendChild(h1);
+  container.appendChild(header);
+}
+
+/** Render a player list with optional codenames */
+export function renderPlayerList(container, players, hostUid, codenames = null) {
+  const list = el('div', 'space-y-2');
+
+  players.forEach((player) => {
+    const row = el('div', 'flex items-center gap-3 px-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700/50');
+
+    // Status dot
+    const dot = el('div', `w-2.5 h-2.5 rounded-full ${player.connected !== false ? 'bg-emerald-400' : 'bg-slate-500'}`);
+    row.appendChild(dot);
+
+    // Name (with optional codename)
+    const displayName = codenames && codenames[player.uid]
+      ? `${codenames[player.uid]} // ${player.name}`
+      : player.name;
+    const name = el('span', `flex-1 text-sm font-medium ${codenames ? 'font-mono' : ''}`, displayName);
+    row.appendChild(name);
+
+    // Host badge
+    if (player.uid === hostUid) {
+      const badge = el('span', 'text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 font-mono', 'HOST');
+      row.appendChild(badge);
+    }
+
+    // Disconnected label
+    if (player.connected === false) {
+      const dc = el('span', 'text-xs text-slate-500 italic', 'disconnected');
+      row.appendChild(dc);
+    }
+
+    list.appendChild(row);
+  });
+
+  container.appendChild(list);
+}
+
+/** Render the countdown timer */
+export function renderTimerDisplay(seconds) {
+  const isWarning = seconds <= 60;
+  const isDanger = seconds <= 30;
+
+  const classes = [
+    'text-4xl font-mono font-bold text-center',
+    isDanger ? 'text-rose-400 timer-warning' : isWarning ? 'text-amber-400' : 'text-cyan-400',
+  ].join(' ');
+
+  return `<div class="${classes}">${formatTime(seconds)}</div>`;
+}
+
+/** Render a location grid for reference */
+export function renderLocationGrid(locations, crossedOut = new Set()) {
+  const grid = el('div', 'location-grid');
+
+  locations.forEach((loc, i) => {
+    const item = el('div',
+      `location-item cursor-pointer select-none ${crossedOut.has(i) ? 'location-item-crossed' : ''}`,
+      loc.name
+    );
+    item.dataset.index = i;
+    grid.appendChild(item);
+  });
+
+  return grid;
+}
+
+/** Render an error message */
+export function showError(container, message) {
+  // Remove any existing error
+  const existing = container.querySelector('.error-msg');
+  if (existing) existing.remove();
+
+  const errorDiv = el('div', 'error-msg bg-rose-500/20 border border-rose-500/50 text-rose-300 text-sm px-4 py-3 rounded-lg mb-4', message);
+  container.prepend(errorDiv);
+
+  setTimeout(() => errorDiv.remove(), 5000);
+}
+
+/** Copy text to clipboard with visual feedback */
+export async function copyToClipboard(text, button) {
+  try {
+    await navigator.clipboard.writeText(text);
+    const original = button.textContent;
+    button.textContent = 'Copied!';
+    setTimeout(() => (button.textContent = original), 1500);
+  } catch {
+    // Fallback
+    const input = document.createElement('input');
+    input.value = text;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+  }
+}
+
+/** Render prompt suggestions panel (Phase 1.1) */
+export function renderPromptSuggestions(pack, onDismiss, onShuffle) {
+  const wrapper = el('div', 'card mb-4 border-slate-700/50');
+  const header = el('div', 'flex items-center justify-between mb-2');
+  header.innerHTML = `<span class="text-xs text-slate-400 uppercase tracking-wider">Conversation Starters</span>`;
+
+  const btns = el('div', 'flex gap-2');
+  const shuffleBtn = el('button', 'text-xs text-slate-500 hover:text-slate-300 cursor-pointer', 'Shuffle');
+  shuffleBtn.addEventListener('click', () => {
+    play('click');
+    onShuffle();
+  });
+  const dismissBtn = el('button', 'text-xs text-slate-500 hover:text-slate-300 cursor-pointer', 'Dismiss');
+  dismissBtn.addEventListener('click', () => {
+    play('click');
+    onDismiss();
+  });
+  btns.appendChild(shuffleBtn);
+  btns.appendChild(dismissBtn);
+  header.appendChild(btns);
+  wrapper.appendChild(header);
+
+  const prompts = getRandomPrompts(pack, 3);
+  const list = el('div', 'space-y-1.5');
+  prompts.forEach((prompt) => {
+    const item = el('div', 'text-xs text-slate-400 pl-2 border-l-2 border-slate-700', prompt);
+    list.appendChild(item);
+  });
+  wrapper.appendChild(list);
+  return wrapper;
+}
+
+/** Render mute toggle button (Phase 2.1) */
+export function renderMuteToggle() {
+  const btn = el('button', 'text-xs px-2 py-1 rounded text-slate-400 hover:text-slate-200 cursor-pointer');
+  btn.textContent = isMuted() ? 'UNMUTE' : 'MUTE';
+  btn.addEventListener('click', () => {
+    const newMuted = !isMuted();
+    setMuted(newMuted);
+    btn.textContent = newMuted ? 'UNMUTE' : 'MUTE';
+    if (!newMuted) play('click');
+  });
+  return btn;
+}
+
+/** Wrap an element with a declassify redaction effect (Phase 1.3) */
+export function wrapRedacted(element, delayMs = 0) {
+  const wrapper = el('div', 'redacted');
+  wrapper.style.display = 'inline-block';
+  const bar = el('div', 'redacted-bar');
+  bar.style.animation = `declassify ${1.2}s ease-out ${delayMs}ms forwards`;
+  element.style.animation = `declassifyText ${1.2}s ease-out ${delayMs}ms forwards`;
+  element.style.opacity = '0';
+  wrapper.appendChild(element);
+  wrapper.appendChild(bar);
+  return wrapper;
+}
+
+/** Render a single achievement badge (Phase 2.3) */
+export function renderAchievementBadge(achievement) {
+  const badge = el('span', 'inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono');
+  badge.title = achievement.desc;
+  badge.textContent = `${achievement.icon} ${achievement.name}`;
+  return badge;
+}
+
+/** Render an achievement toast notification (Phase 2.3) */
+export function renderAchievementToast(achievement) {
+  const toast = el('div', 'fixed bottom-4 right-4 z-50 card border-amber-500/50 bg-slate-800 shadow-lg max-w-xs');
+  toast.style.animation = 'fadeIn 0.3s ease-out';
+  toast.innerHTML = `
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">${sanitize(achievement.icon)}</span>
+      <div>
+        <div class="text-xs text-amber-400 uppercase tracking-wider font-mono">Achievement Unlocked</div>
+        <div class="text-sm font-bold text-slate-100">${sanitize(achievement.name)}</div>
+        <div class="text-xs text-slate-400">${sanitize(achievement.desc)}</div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+  return toast;
+}
+
+/** Render timeline of game events (Phase 2.2) */
+export function renderTimeline(events, startedAt, players, codenames) {
+  const wrapper = el('div', 'relative');
+  const line = el('div', 'timeline-line');
+  wrapper.appendChild(line);
+
+  if (!events || events.length === 0) {
+    const empty = el('div', 'text-xs text-slate-500 pl-8 py-2', 'No events recorded.');
+    wrapper.appendChild(empty);
+    return wrapper;
+  }
+
+  const playerMap = {};
+  players.forEach((p) => {
+    playerMap[p.uid] = codenames && codenames[p.uid]
+      ? `${codenames[p.uid]} // ${p.name}`
+      : p.name;
+  });
+
+  const typeColors = {
+    vote: 'bg-amber-400',
+    spy_guess: 'bg-rose-400',
+    majority: 'bg-emerald-400',
+    timeout: 'bg-slate-400',
+  };
+
+  const typeLabels = {
+    vote: 'VOTE',
+    spy_guess: 'SPY GUESS',
+    majority: 'MAJORITY',
+    timeout: 'TIMEOUT',
+  };
+
+  events.forEach((evt) => {
+    const entry = el('div', 'timeline-entry');
+    const dot = el('div', `timeline-dot ${typeColors[evt.type] || 'bg-slate-400'}`);
+    entry.appendChild(dot);
+
+    const elapsedSec = Math.floor((evt.ts - startedAt) / 1000);
+    const mins = Math.floor(elapsedSec / 60);
+    const secs = elapsedSec % 60;
+    const timeStr = `T+${mins}:${secs.toString().padStart(2, '0')}`;
+
+    let desc = '';
+    if (evt.type === 'vote') {
+      desc = `${sanitize(playerMap[evt.actor] || 'Unknown')} voted for ${sanitize(playerMap[evt.target] || 'Unknown')}`;
+    } else if (evt.type === 'spy_guess') {
+      desc = `${sanitize(playerMap[evt.actor] || 'Unknown')} guessed "${sanitize(evt.guessedLocation || 'a location')}"`;
+    } else if (evt.type === 'majority') {
+      desc = `Majority reached against ${sanitize(playerMap[evt.target] || 'Unknown')}`;
+    } else if (evt.type === 'timeout') {
+      desc = 'Time expired';
+    }
+
+    entry.innerHTML += `
+      <div class="flex items-baseline gap-2">
+        <span class="text-xs font-mono text-slate-500">${timeStr}</span>
+        <span class="text-xs font-mono px-1.5 py-0.5 rounded ${typeColors[evt.type] || 'bg-slate-400'} text-slate-900">${typeLabels[evt.type] || evt.type}</span>
+      </div>
+      <div class="text-xs text-slate-300 mt-0.5">${desc}</div>
+    `;
+    wrapper.appendChild(entry);
+  });
+
+  return wrapper;
+}
