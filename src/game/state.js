@@ -8,6 +8,8 @@ let state = {
   playerName: '',
   roomCode: null,
   room: null, // Full room object from Firebase
+  myRole: null, // Per-player secret: { isSpy, location, role, roleIndex, spyHint }
+  roomSecrets: null, // Host-only: { spyId, spyIds, location, locationIndex, roles }
 };
 
 const listeners = new Set();

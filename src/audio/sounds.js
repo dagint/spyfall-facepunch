@@ -3,8 +3,10 @@
  * Generates sounds procedurally — no external audio files needed.
  */
 
+import { STORAGE_KEYS } from '../constants.js';
+
 let audioCtx = null;
-let muted = localStorage.getItem('spyfall_muted') === 'true';
+let muted = localStorage.getItem(STORAGE_KEYS.MUTED) === 'true';
 
 function getCtx() {
   if (!audioCtx) {
@@ -42,14 +44,14 @@ export function play(soundName) {
     };
     const fn = sounds[soundName];
     if (fn) fn();
-  } catch {
-    // Silently fail if audio not available
+  } catch (err) {
+    console.warn('Audio playback failed:', err);
   }
 }
 
 export function setMuted(bool) {
   muted = bool;
-  localStorage.setItem('spyfall_muted', String(bool));
+  localStorage.setItem(STORAGE_KEYS.MUTED, String(bool));
 }
 
 export function isMuted() {
@@ -77,7 +79,19 @@ function playTone(ctx, freq, duration, type, volume) {
 
 function playChord(ctx, freqs, duration, type, volume) {
   freqs.forEach((freq, i) => {
-    setTimeout(() => playTone(ctx, freq, duration, type, volume * 0.6), i * 100);
+    // Use Web Audio API scheduling instead of setTimeout
+    const startTime = ctx.currentTime + i * 0.1;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(volume * 0.6, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+    osc.start(startTime);
+    osc.stop(startTime + duration);
   });
 }
 

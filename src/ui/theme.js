@@ -1,4 +1,6 @@
-const STORAGE_KEY = 'spyfall_theme';
+import { STORAGE_KEYS } from '../constants.js';
+
+const STORAGE_KEY = STORAGE_KEYS.THEME;
 
 /** Get the current theme name from localStorage (defaults to 'default'). */
 export function getTheme() {

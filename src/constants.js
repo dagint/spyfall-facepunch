@@ -22,3 +22,45 @@ export const LIMITS = {
   MAX_LOCATION_NAME_LENGTH: 40,
   ROLES_PER_LOCATION: 8,
 };
+
+// Achievement timing thresholds (ms)
+export const ACHIEVEMENT_THRESHOLDS = {
+  FAST_SPY_GUESS_MS: 60000,
+  FIRST_VOTE_CATCH_MS: 120000,
+};
+
+// Game phases
+export const PHASE = {
+  LOBBY: 'lobby',
+  PLAYING: 'playing',
+  RESULTS: 'results',
+};
+
+// Game event types (for timeline)
+export const EVENT_TYPE = {
+  VOTE: 'vote',
+  SPY_GUESS: 'spy_guess',
+  MAJORITY: 'majority',
+  TIMEOUT: 'timeout',
+};
+
+// Game result types
+export const RESULT_TYPE = {
+  VOTE: 'vote',
+  GUESS: 'guess',
+  TIMEOUT: 'timeout',
+  EXFILTRATION: 'exfiltration',
+};
+
+// Settings debounce delay (ms)
+export const SETTINGS_DEBOUNCE_MS = 400;
+
+// localStorage / sessionStorage keys
+export const STORAGE_KEYS = {
+  PLAYER_NAME: 'spyfall_name',
+  ROOM: 'spyfall_room',
+  CROSSED_OUT: 'spyfall_crossed',
+  MUTED: 'spyfall_muted',
+  THEME: 'spyfall_theme',
+  ACHIEVEMENTS_PREFIX: 'spyfall_achievements_',
+};

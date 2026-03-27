@@ -4,7 +4,9 @@ import {
   isCurrentUserAdmin, isAdminEmail, signInWithGoogle, signOutAdmin, getCurrentEmail,
 } from '../../firebase.js';
 import { navigate } from '../../router.js';
+import { iconBarChart, iconPercent, iconClock, iconUsers, iconFolder, iconTrophy, iconHistory as iconHistoryIcon, iconLock } from '../icons.js';
 
+/** Render the admin dashboard (rooms, history, stats, leaderboard). */
 export function renderAdmin(container) {
   const unsubs = [];
   let historyData = [];
@@ -21,6 +23,7 @@ export function renderAdmin(container) {
     container.innerHTML = '';
     const wrapper = el('div', 'flex-1 flex flex-col items-center justify-center text-center');
     wrapper.innerHTML = `
+      <div class="text-cyan-400 mb-4 opacity-60">${iconLock(48)}</div>
       <div class="text-2xl font-mono font-bold text-cyan-400 mb-2">ADMIN ACCESS</div>
       <div class="text-sm text-slate-400 mb-6">Sign in with a Gmail admin account</div>
     `;
@@ -86,6 +89,8 @@ export function renderAdmin(container) {
 
   // Tabs
   const tabs = el('div', 'flex gap-1 mb-4 border-b border-slate-700');
+  tabs.setAttribute('role', 'tablist');
+  tabs.setAttribute('aria-label', 'Admin dashboard tabs');
   const tabDefs = [
     { id: 'rooms', label: 'Active Rooms' },
     { id: 'history', label: 'Game History' },
@@ -95,6 +100,10 @@ export function renderAdmin(container) {
   const tabButtons = {};
   tabDefs.forEach((t) => {
     const btn = el('button', 'px-4 py-2 text-sm font-mono cursor-pointer transition-colors', t.label);
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-selected', String(t.id === activeTab));
+    btn.setAttribute('aria-controls', 'admin-tab-content');
+    btn.id = `tab-${t.id}`;
     btn.addEventListener('click', () => {
       activeTab = t.id;
       updateTabStyles();
@@ -107,7 +116,9 @@ export function renderAdmin(container) {
 
   function updateTabStyles() {
     Object.entries(tabButtons).forEach(([id, btn]) => {
-      if (id === activeTab) {
+      const isActive = id === activeTab;
+      btn.setAttribute('aria-selected', String(isActive));
+      if (isActive) {
         btn.className = 'px-4 py-2 text-sm font-mono cursor-pointer text-cyan-400 border-b-2 border-cyan-400 -mb-px';
       } else {
         btn.className = 'px-4 py-2 text-sm font-mono cursor-pointer text-slate-400 hover:text-slate-200 transition-colors';
@@ -118,10 +129,14 @@ export function renderAdmin(container) {
 
   // Content area
   const content = el('div', '');
+  content.id = 'admin-tab-content';
+  content.setAttribute('role', 'tabpanel');
+  content.setAttribute('aria-labelledby', `tab-${activeTab}`);
   container.appendChild(content);
 
   function renderTabContent() {
     content.innerHTML = '';
+    content.setAttribute('aria-labelledby', `tab-${activeTab}`);
     if (activeTab === 'rooms') renderRooms();
     else if (activeTab === 'history') renderHistory();
     else if (activeTab === 'stats') renderStats();
@@ -132,7 +147,9 @@ export function renderAdmin(container) {
   function renderRooms() {
     const rooms = Object.entries(roomsData);
     if (rooms.length === 0) {
-      content.appendChild(el('div', 'text-center text-slate-500 py-8', 'No active rooms'));
+      const empty = el('div', 'text-center py-12');
+      empty.innerHTML = `<div class="text-slate-600 mb-3 flex justify-center">${iconFolder(48)}</div><div class="text-slate-500 text-sm">No active rooms</div>`;
+      content.appendChild(empty);
       return;
     }
 
@@ -167,7 +184,9 @@ export function renderAdmin(container) {
   // ===== Game History =====
   function renderHistory() {
     if (historyData.length === 0) {
-      content.appendChild(el('div', 'text-center text-slate-500 py-8', 'No games recorded yet'));
+      const empty = el('div', 'text-center py-12');
+      empty.innerHTML = `<div class="text-slate-600 mb-3 flex justify-center">${iconHistoryIcon(48)}</div><div class="text-slate-500 text-sm">No games recorded yet</div>`;
+      content.appendChild(empty);
       return;
     }
 
@@ -282,7 +301,9 @@ export function renderAdmin(container) {
   // ===== Stats =====
   function renderStats() {
     if (historyData.length === 0) {
-      content.appendChild(el('div', 'text-center text-slate-500 py-8', 'No data yet'));
+      const empty = el('div', 'text-center py-12');
+      empty.innerHTML = `<div class="text-slate-600 mb-3 flex justify-center">${iconBarChart(48)}</div><div class="text-slate-500 text-sm">No data yet</div>`;
+      content.appendChild(empty);
       return;
     }
 
@@ -316,10 +337,10 @@ export function renderAdmin(container) {
 
     const grid = el('div', 'grid grid-cols-2 gap-4 mb-6');
 
-    grid.appendChild(statCard('Total Games', total, 'text-cyan-400'));
-    grid.appendChild(statCard('Spy Win Rate', `${total > 0 ? Math.round((spyWins / total) * 100) : 0}%`, 'text-rose-400'));
-    grid.appendChild(statCard('Player Win Rate', `${total > 0 ? Math.round((playerWins / total) * 100) : 0}%`, 'text-emerald-400'));
-    grid.appendChild(statCard('Avg Duration', formatDuration(avgDuration), 'text-amber-400'));
+    grid.appendChild(statCard('Total Games', total, 'text-cyan-400', iconBarChart(20)));
+    grid.appendChild(statCard('Spy Win Rate', `${total > 0 ? Math.round((spyWins / total) * 100) : 0}%`, 'text-rose-400', iconPercent(20)));
+    grid.appendChild(statCard('Player Win Rate', `${total > 0 ? Math.round((playerWins / total) * 100) : 0}%`, 'text-emerald-400', iconUsers(20)));
+    grid.appendChild(statCard('Avg Duration', formatDuration(avgDuration), 'text-amber-400', iconClock(20)));
 
     content.appendChild(grid);
 
@@ -380,7 +401,9 @@ export function renderAdmin(container) {
   // ===== Leaderboard =====
   function renderLeaderboard() {
     if (historyData.length === 0) {
-      content.appendChild(el('div', 'text-center text-slate-500 py-8', 'No data yet'));
+      const empty = el('div', 'text-center py-12');
+      empty.innerHTML = `<div class="text-slate-600 mb-3 flex justify-center">${iconTrophy(48)}</div><div class="text-slate-500 text-sm">No data yet</div>`;
+      content.appendChild(empty);
       return;
     }
 
@@ -465,9 +488,10 @@ export function renderAdmin(container) {
 
 // ===== Helpers =====
 
-function statCard(label, value, color) {
+function statCard(label, value, color, iconHtml = '') {
   const card = el('div', 'card text-center');
   card.innerHTML = `
+    ${iconHtml ? `<div class="${color} opacity-50 mb-2 flex justify-center">${iconHtml}</div>` : ''}
     <div class="text-xs text-slate-500 uppercase tracking-wider font-mono mb-1">${label}</div>
     <div class="text-2xl font-bold ${color} font-mono">${value}</div>
   `;

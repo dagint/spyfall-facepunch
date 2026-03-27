@@ -4,11 +4,19 @@ import { updateSettings, startGame, leaveRoom, addCustomLocation, removeCustomLo
 import { navigate } from '../../router.js';
 import { loadAchievements } from '../../game/achievements.js';
 import { ACHIEVEMENTS } from '../../data/achievements.js';
-import { LIMITS } from '../../constants.js';
+import { LIMITS, SETTINGS_DEBOUNCE_MS } from '../../constants.js';
 import { LOCATION_PACKS } from '../../data/locations.js';
 
+/** Render the lobby screen (room code, player list, host settings). */
 export function renderLobby(container) {
   let unsub = null;
+  let lastStateKey = null;
+  let settingsTimer = null;
+
+  function debouncedUpdateSettings(settings) {
+    clearTimeout(settingsTimer);
+    settingsTimer = setTimeout(() => updateSettings(settings), SETTINGS_DEBOUNCE_MS);
+  }
 
   function render() {
     const state = getState();
@@ -18,6 +26,16 @@ export function renderLobby(container) {
 
     const players = getPlayers();
     const activePlayers = getActivePlayers();
+
+    // Skip re-render if state hasn't meaningfully changed
+    const stateKey = JSON.stringify({
+      phase: room.phase,
+      settings: room.settings,
+      players: Object.keys(room.players || {}).map(u => `${u}:${room.players[u].connected}`).join(','),
+      customLocations: room.customLocations ? Object.keys(room.customLocations).join(',') : '',
+    });
+    if (lastStateKey !== null && stateKey === lastStateKey) return;
+    lastStateKey = stateKey;
     const host = isHost();
     const settings = room.settings || {};
 
@@ -143,32 +161,32 @@ export function renderLobby(container) {
 
         if (durSelect) {
           durSelect.addEventListener('change', () => {
-            updateSettings({ durationSec: parseInt(durSelect.value) });
+            debouncedUpdateSettings({ durationSec: parseInt(durSelect.value) });
           });
         }
         if (packSelect) {
           packSelect.addEventListener('change', () => {
-            updateSettings({ pack: packSelect.value });
+            debouncedUpdateSettings({ pack: packSelect.value });
           });
         }
         if (hackerToggle) {
           hackerToggle.addEventListener('change', () => {
-            updateSettings({ hackerMode: hackerToggle.checked });
+            debouncedUpdateSettings({ hackerMode: hackerToggle.checked });
           });
         }
         if (hintTypeSelect) {
           hintTypeSelect.addEventListener('change', () => {
-            updateSettings({ hackerHintType: hintTypeSelect.value });
+            debouncedUpdateSettings({ hackerHintType: hintTypeSelect.value });
           });
         }
         if (doubleAgentToggle) {
           doubleAgentToggle.addEventListener('change', () => {
-            updateSettings({ doubleAgent: doubleAgentToggle.checked });
+            debouncedUpdateSettings({ doubleAgent: doubleAgentToggle.checked });
           });
         }
         if (incidentToggle) {
           incidentToggle.addEventListener('change', () => {
-            updateSettings({ incidentMode: incidentToggle.checked });
+            debouncedUpdateSettings({ incidentMode: incidentToggle.checked });
           });
         }
       }, 0);
@@ -294,5 +312,6 @@ export function renderLobby(container) {
 
   return () => {
     if (unsub) unsub();
+    clearTimeout(settingsTimer);
   };
 }

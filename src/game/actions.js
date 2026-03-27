@@ -8,27 +8,59 @@ import {
   push,
   isCurrentUserAdmin,
 } from '../firebase.js';
-import { getState, setState } from './state.js';
+import { getState, setState, getActivePlayers } from './state.js';
 import { generateRoomCode } from '../utils/roomCode.js';
 import { buildGameState, checkMajority } from './engine.js';
 import { LOCATIONS } from '../data/locations.js';
 import { navigate } from '../router.js';
-import { getActivePlayers } from './state.js';
 import { listenToRoom, stopListening } from './listeners.js';
-import { LIMITS } from '../constants.js';
+import { LIMITS, STORAGE_KEYS, PHASE, EVENT_TYPE, RESULT_TYPE } from '../constants.js';
+import { isSpy as checkIsSpy, getSpyUids } from '../utils/gameHelpers.js';
 
-/** Persist detailed game history for dashboard analytics */
+/**
+ * Build the full reveal object included in every game result.
+ * This lets the results screen display spy identity, location, and roles
+ * without needing access to roomSecrets.
+ */
+function buildRevealData(roomSecrets) {
+  if (!roomSecrets) return {};
+  return {
+    spyId: roomSecrets.spyId,
+    spyIds: roomSecrets.spyIds || null,
+    location: roomSecrets.location,
+    locationIndex: roomSecrets.locationIndex,
+    roles: roomSecrets.roles,
+  };
+}
+
+/**
+ * Finalize a game: write result, transition to RESULTS phase, and persist history.
+ * Uses a single atomic multi-path update for consistency.
+ */
+async function finalizeGame(roomCode, resultPayload, extraGameUpdates = {}) {
+  const gameUpdates = { ...extraGameUpdates, result: resultPayload };
+  const updates = {
+    [`rooms/${roomCode}/phase`]: PHASE.RESULTS,
+  };
+  for (const [key, value] of Object.entries(gameUpdates)) {
+    updates[`rooms/${roomCode}/game/${key}`] = value;
+  }
+  await update(ref(db), updates);
+  persistGameHistory(roomCode);
+}
+
+/** Persist detailed game history for dashboard analytics (reads from local state) */
 async function persistGameHistory(roomCode) {
   try {
-    const snap = await get(ref(db, `rooms/${roomCode}`));
-    if (!snap.exists()) return;
-    const room = snap.val();
+    const { room } = getState();
+    if (!room) return;
     const game = room.game;
     if (!game || !game.result) return;
 
     const players = room.players || {};
-    const location = game.location || LOCATIONS[game.locationIndex] || {};
-    const spyUids = game.spyIds ? Object.keys(game.spyIds) : (game.spyId ? [game.spyId] : []);
+    const result = game.result;
+    const location = result.location || {};
+    const spyUids = getSpyUids(result);
 
     const historyEntry = {
       roomCode,
@@ -39,19 +71,19 @@ async function persistGameHistory(roomCode) {
       location: location.name || 'Unknown',
       locationPack: location.pack || 'unknown',
       result: {
-        type: game.result.type,
-        winner: game.result.winner,
-        accused: game.result.accused || null,
-        guessedLocation: game.result.guessedLocation || null,
-        correct: game.result.correct ?? null,
-        caughtSpies: game.result.caughtSpies || null,
+        type: result.type,
+        winner: result.winner,
+        accused: result.accused || null,
+        guessedLocation: result.guessedLocation || null,
+        correct: result.correct ?? null,
+        caughtSpies: result.caughtSpies || null,
       },
       settings: room.settings || {},
       players: Object.entries(players).reduce((acc, [uid, p]) => {
         acc[uid] = {
           name: p.name,
           wasSpy: spyUids.includes(uid),
-          role: game.roles?.[uid] != null ? (location.roles?.[game.roles[uid]] || `Role ${game.roles[uid]}`) : null,
+          role: result.roles?.[uid] != null ? (location.roles?.[result.roles[uid]] || `Role ${result.roles[uid]}`) : null,
           codename: game.codenames?.[uid] || null,
         };
         return acc;
@@ -62,20 +94,20 @@ async function persistGameHistory(roomCode) {
     };
 
     await push(ref(db, 'gameHistory'), historyEntry);
-  } catch {
-    // Non-critical — don't block game flow
+  } catch (err) {
+    console.warn('Failed to persist game history:', err);
   }
 }
 
-/** Log a game event to the timeline (Phase 2.2) */
+/** Log a game event to the timeline */
 async function logEvent(type, data = {}) {
   const { roomCode } = getState();
   if (!roomCode) return;
   try {
     const eventsRef = ref(db, `rooms/${roomCode}/game/events`);
     await push(eventsRef, { type, ...data, ts: Date.now() });
-  } catch {
-    // Non-critical — don't block game flow
+  } catch (err) {
+    console.warn('Failed to log event:', err);
   }
 }
 
@@ -99,14 +131,14 @@ export async function createRoom(playerName) {
   const roomData = {
     host: uid,
     settings: {
-      durationSec: 480, // 8 minutes default
+      durationSec: 480,
       pack: 'all',
       hackerMode: false,
       hackerHintType: 'letter',
       doubleAgent: false,
       incidentMode: false,
     },
-    phase: 'lobby',
+    phase: PHASE.LOBBY,
     players: {
       [uid]: {
         name: playerName,
@@ -121,12 +153,11 @@ export async function createRoom(playerName) {
 
   await set(ref(db, `rooms/${roomCode}`), roomData);
 
-  // Set up disconnect handler
   const connRef = ref(db, `rooms/${roomCode}/players/${uid}/connected`);
   onDisconnect(connRef).set(false);
 
   setState({ roomCode, playerName });
-  sessionStorage.setItem('spyfall_room', JSON.stringify({ roomCode }));
+  sessionStorage.setItem(STORAGE_KEYS.ROOM, JSON.stringify({ roomCode }));
   listenToRoom(roomCode);
   navigate('lobby', { roomCode });
 }
@@ -141,7 +172,7 @@ export async function joinRoom(roomCode, playerName) {
   }
 
   const room = roomSnap.val();
-  if (room.phase !== 'lobby') {
+  if (room.phase !== PHASE.LOBBY) {
     throw new Error('Game already in progress');
   }
 
@@ -150,19 +181,17 @@ export async function joinRoom(roomCode, playerName) {
     throw new Error('Room is full');
   }
 
-  // Add player to room
   await update(ref(db, `rooms/${roomCode}/players/${uid}`), {
     name: playerName,
     connected: true,
     joinedAt: Date.now(),
   });
 
-  // Set up disconnect handler
   const connRef = ref(db, `rooms/${roomCode}/players/${uid}/connected`);
   onDisconnect(connRef).set(false);
 
   setState({ roomCode, playerName });
-  sessionStorage.setItem('spyfall_room', JSON.stringify({ roomCode }));
+  sessionStorage.setItem(STORAGE_KEYS.ROOM, JSON.stringify({ roomCode }));
   listenToRoom(roomCode);
   navigate('lobby', { roomCode });
 }
@@ -176,7 +205,8 @@ export async function updateSettings(settings) {
 
 /** Start the game (host only) */
 export async function startGame() {
-  const { roomCode, room } = getState();
+  const { uid, roomCode, room } = getState();
+  if (room.host !== uid) throw new Error('Only the host can start the game');
   const players = room.players;
   const activeUids = Object.entries(players)
     .filter(([, p]) => p.connected !== false)
@@ -188,187 +218,199 @@ export async function startGame() {
 
   const settings = room.settings || {};
 
-  // Double agent requires 5+ players
   if (settings.doubleAgent && activeUids.length < LIMITS.MIN_PLAYERS_DOUBLE_AGENT) {
     throw new Error(`Double Agent mode requires at least ${LIMITS.MIN_PLAYERS_DOUBLE_AGENT} players`);
   }
 
-  // Load custom locations if any
   let customLocations = [];
   if (room.customLocations) {
     customLocations = Object.values(room.customLocations);
   }
 
-  const gameData = buildGameState(activeUids, {
+  const { publicGame, secrets, playerRoles } = buildGameState(activeUids, {
     ...settings,
     customLocations,
   });
 
-  await update(ref(db, `rooms/${roomCode}`), {
-    phase: 'playing',
-    game: gameData,
+  // Atomic multi-path write: public game + secrets + per-player roles
+  const updates = {
+    [`rooms/${roomCode}/phase`]: PHASE.PLAYING,
+    [`rooms/${roomCode}/game`]: publicGame,
+    [`roomSecrets/${roomCode}`]: secrets,
+  };
+  Object.entries(playerRoles).forEach(([playerUid, roleData]) => {
+    updates[`playerRoles/${roomCode}/${playerUid}`] = roleData;
   });
+
+  await update(ref(db), updates);
 }
 
 /** Cast a vote to accuse a player */
 export async function castVote(targetUid) {
   const { uid, roomCode, room } = getState();
-  if (room?.game?.result?.caughtSpies?.includes(uid)) return; // silently ignore
+  if (room?.game?.result?.caughtSpies?.includes(uid)) return;
   await set(ref(db, `rooms/${roomCode}/game/votes/${uid}`), targetUid);
-  logEvent('vote', { actor: uid, target: targetUid });
+  logEvent(EVENT_TYPE.VOTE, { actor: uid, target: targetUid });
 }
 
 let evaluating = false;
-let advancing = false;
 
 /** Evaluate votes — called by the listener on the host client when votes change */
 export async function evaluateVotes() {
   if (evaluating) return;
-  const { uid, roomCode, room } = getState();
-  if (room.host !== uid) return; // Only host evaluates
-  if (room.game?.result && !room.game.result.partial) return; // Already resolved
+  const { uid, roomCode, room, roomSecrets } = getState();
+  if (room.host !== uid) return;
+  if (room.game?.result && !room.game.result.partial) return;
+  if (!roomSecrets) return; // Secrets not loaded yet
 
   evaluating = true;
   try {
+    const votes = room.game?.votes;
+    const activePlayers = getActivePlayers();
+    const { reached, target } = checkMajority(votes, activePlayers.length);
 
-  const votes = room.game?.votes;
-  const activePlayers = getActivePlayers();
-  const { reached, target } = checkMajority(votes, activePlayers.length);
+    if (reached) {
+      const game = room.game;
+      const targetIsSpy = checkIsSpy(target, roomSecrets);
+      const reveal = buildRevealData(roomSecrets);
 
-  if (reached) {
-    const game = room.game;
-    const isSpy = target === game.spyId || (game.spyIds && game.spyIds[target]);
+      // Double agent: first spy caught, continue if more remain
+      if (roomSecrets.spyIds && targetIsSpy) {
+        const caughtSpies = [...(game.result?.caughtSpies || []), target];
+        const allSpyUids = Object.keys(roomSecrets.spyIds);
+        const remainingSpies = allSpyUids.filter((s) => !caughtSpies.includes(s));
 
-    // Double agent: first spy caught, continue if more remain
-    if (game.spyIds && isSpy) {
-      const caughtSpies = game.result?.caughtSpies || [];
-      caughtSpies.push(target);
-      const allSpyUids = Object.keys(game.spyIds);
-      const remainingSpies = allSpyUids.filter((s) => !caughtSpies.includes(s));
-
-      if (remainingSpies.length > 0) {
-        // First spy caught — reset votes, continue playing
-        await update(ref(db, `rooms/${roomCode}/game`), {
-          votes: null,
-          result: { caughtSpies, partial: true },
-        });
-        logEvent('majority', { target, caughtSpies });
-        return;
+        if (remainingSpies.length > 0) {
+          await update(ref(db, `rooms/${roomCode}/game`), {
+            votes: null,
+            result: { caughtSpies, partial: true },
+          });
+          logEvent(EVENT_TYPE.MAJORITY, { target, caughtSpies });
+          return;
+        }
       }
-    }
 
-    // Exfiltration mode: wrong accusation boosts spy progress instead of ending
-    if (!isSpy && game.exfiltration) {
-      const exf = game.exfiltration;
-      const voteBoost = exf.voteBoost || 0;
-      const newProgress = Math.min(100, exf.progress + voteBoost);
-      if (newProgress >= 100) {
-        await update(ref(db, `rooms/${roomCode}/game`), {
-          exfiltration: { ...exf, progress: 100 },
-          votes: null,
-          result: {
-            type: 'exfiltration',
+      // Exfiltration mode: wrong accusation boosts spy progress instead of ending
+      if (!targetIsSpy && game.exfiltration) {
+        const exf = game.exfiltration;
+        const voteBoost = exf.voteBoost || 0;
+        const newProgress = Math.min(100, exf.progress + voteBoost);
+        if (newProgress >= 100) {
+          await finalizeGame(roomCode, {
+            type: RESULT_TYPE.EXFILTRATION,
             winner: 'spy',
             resolvedAtMs: Date.now(),
-          },
-        });
-        await set(ref(db, `rooms/${roomCode}/phase`), 'results');
-        persistGameHistory(roomCode);
-      } else {
-        await update(ref(db, `rooms/${roomCode}/game`), {
-          exfiltration: { ...exf, progress: newProgress },
-          votes: null,
-        });
+            ...reveal,
+          }, { exfiltration: { ...exf, progress: 100 }, votes: null });
+        } else {
+          await update(ref(db, `rooms/${roomCode}/game`), {
+            exfiltration: { ...exf, progress: newProgress },
+            votes: null,
+          });
+        }
+        logEvent(EVENT_TYPE.MAJORITY, { target, wrongAccusation: true });
+        return;
       }
-      logEvent('majority', { target, wrongAccusation: true });
-      return;
-    }
 
-    // Game ends
-    await update(ref(db, `rooms/${roomCode}/game`), {
-      result: {
-        type: 'vote',
+      // Game ends
+      await finalizeGame(roomCode, {
+        type: RESULT_TYPE.VOTE,
         accused: target,
-        isSpy,
-        winner: isSpy ? 'players' : 'spy',
-        caughtSpies: game.spyIds ? [...(game.result?.caughtSpies || []), target] : undefined,
+        isSpy: targetIsSpy,
+        winner: targetIsSpy ? 'players' : 'spy',
+        caughtSpies: roomSecrets.spyIds ? [...(game.result?.caughtSpies || []), target] : undefined,
         resolvedAtMs: Date.now(),
-      },
-    });
-    await set(ref(db, `rooms/${roomCode}/phase`), 'results');
-    persistGameHistory(roomCode);
-    logEvent('majority', { target });
-  }
-
+        ...reveal,
+      });
+      logEvent(EVENT_TYPE.MAJORITY, { target });
+    }
   } finally {
     evaluating = false;
   }
 }
 
-/** Spy guesses the location */
+/** Spy writes their guess — host evaluates correctness via evaluateSpyGuess() */
 export async function spyGuessLocation(locationIndex, locationName = null) {
-  const { uid, roomCode, room } = getState();
-  const game = room.game;
+  const { uid, roomCode, myRole, room } = getState();
 
-  const isSpyAllowed = uid === game.spyId || (game.spyIds && game.spyIds[uid]);
-  if (!isSpyAllowed) {
+  if (!myRole?.isSpy) {
     throw new Error('Only the spy can guess');
   }
 
-  // Check if this spy was already caught in double agent mode
-  if (game.result?.caughtSpies?.includes(uid)) {
+  const game = room?.game;
+  if (game?.result?.caughtSpies?.includes(uid)) {
     throw new Error('You have already been caught');
   }
 
-  // Support both index-based and name-based guessing (for custom locations)
+  // Write the guess — the host will evaluate correctness
+  const guessValue = locationName !== null ? `name:${locationName}` : `idx:${locationIndex}`;
+  await set(ref(db, `rooms/${roomCode}/game/spyGuess`), guessValue);
+  logEvent(EVENT_TYPE.SPY_GUESS, { actor: uid, guessedLocation: locationName || (LOCATIONS[locationIndex]?.name || 'Unknown') });
+}
+
+/** Host evaluates a spy's location guess (called by listener when spyGuess changes) */
+export async function evaluateSpyGuess() {
+  const { uid, roomCode, room, roomSecrets } = getState();
+  if (room.host !== uid) return;
+  if (!roomSecrets) return;
+  if (room.game?.result && !room.game.result.partial) return;
+
+  const guessValue = room.game?.spyGuess;
+  if (guessValue == null) return;
+
   let correct;
   let guessedName;
-  if (locationName !== null) {
-    // Name-based comparison (custom locations)
-    guessedName = locationName;
-    correct = game.location?.name === locationName;
-  } else {
+
+  if (typeof guessValue === 'string' && guessValue.startsWith('name:')) {
+    // Name-based guess (custom location)
+    guessedName = guessValue.slice(5);
+    correct = roomSecrets.location?.name === guessedName;
+  } else if (typeof guessValue === 'string' && guessValue.startsWith('idx:')) {
+    // Index-based guess
+    const locationIndex = parseInt(guessValue.slice(4));
     guessedName = LOCATIONS[locationIndex]?.name || 'Unknown';
-    correct = locationIndex === game.locationIndex;
+    correct = locationIndex >= 0 && locationIndex === roomSecrets.locationIndex;
+  } else {
+    // Legacy format fallback
+    return;
   }
 
-  await update(ref(db, `rooms/${roomCode}/game`), {
-    spyGuess: locationIndex ?? locationName,
-    result: {
-      type: 'guess',
-      guessedLocation: guessedName,
-      correct,
-      winner: correct ? 'spy' : 'players',
-      resolvedAtMs: Date.now(),
-    },
+  const reveal = buildRevealData(roomSecrets);
+
+  await finalizeGame(roomCode, {
+    type: RESULT_TYPE.GUESS,
+    guessedLocation: guessedName,
+    correct,
+    winner: correct ? 'spy' : 'players',
+    resolvedAtMs: Date.now(),
+    ...reveal,
   });
-  await set(ref(db, `rooms/${roomCode}/phase`), 'results');
-  persistGameHistory(roomCode);
-  logEvent('spy_guess', { actor: uid, guessedLocation: guessedName });
+  logEvent(EVENT_TYPE.SPY_GUESS, { guessedLocation: guessedName, correct });
 }
 
 /** Handle timer expiry (host only) */
 export async function handleTimerExpiry() {
-  const { roomCode, room, uid } = getState();
-  if (room.host !== uid) return; // Only host writes
-  if (room.game?.result && !room.game.result.partial) return; // Already ended
+  const { roomCode, room, uid, roomSecrets } = getState();
+  if (room.host !== uid) return;
+  if (room.game?.result && !room.game.result.partial) return;
 
-  await update(ref(db, `rooms/${roomCode}/game`), {
-    result: {
-      type: 'timeout',
-      winner: 'spy',
-      resolvedAtMs: Date.now(),
-    },
+  const reveal = buildRevealData(roomSecrets);
+
+  await finalizeGame(roomCode, {
+    type: RESULT_TYPE.TIMEOUT,
+    winner: 'spy',
+    resolvedAtMs: Date.now(),
+    ...reveal,
   });
-  await set(ref(db, `rooms/${roomCode}/phase`), 'results');
-  persistGameHistory(roomCode);
-  logEvent('timeout', {});
+  logEvent(EVENT_TYPE.TIMEOUT, {});
 }
+
+let advancing = false;
 
 /** Advance round in incident response mode (host only) */
 export async function advanceRound() {
   if (advancing) return;
-  const { roomCode, room, uid } = getState();
+  const { roomCode, room, uid, roomSecrets } = getState();
   if (room.host !== uid) return;
   if (room.game?.result && !room.game.result.partial) return;
 
@@ -381,17 +423,13 @@ export async function advanceRound() {
     const newRound = exf.roundNumber + 1;
 
     if (newProgress >= 100) {
-      // Spy wins via exfiltration
-      await update(ref(db, `rooms/${roomCode}/game`), {
-        exfiltration: { ...exf, progress: 100, roundNumber: newRound },
-        result: {
-          type: 'exfiltration',
-          winner: 'spy',
-          resolvedAtMs: Date.now(),
-        },
-      });
-      await set(ref(db, `rooms/${roomCode}/phase`), 'results');
-      persistGameHistory(roomCode);
+      const reveal = buildRevealData(roomSecrets);
+      await finalizeGame(roomCode, {
+        type: RESULT_TYPE.EXFILTRATION,
+        winner: 'spy',
+        resolvedAtMs: Date.now(),
+        ...reveal,
+      }, { exfiltration: { ...exf, progress: 100, roundNumber: newRound } });
     } else {
       await update(ref(db, `rooms/${roomCode}/game/exfiltration`), {
         progress: newProgress,
@@ -422,15 +460,19 @@ export async function removeCustomLocation(locationKey) {
   await set(ref(db, `rooms/${roomCode}/customLocations/${locationKey}`), null);
 }
 
-/** Play again — reset to lobby */
+/** Play again — reset to lobby, clear secrets */
 export async function playAgain() {
   const { roomCode, uid, room } = getState();
   if (room.host !== uid) return;
 
-  await update(ref(db, `rooms/${roomCode}`), {
-    phase: 'lobby',
-    game: null,
-  });
+  // Atomic clear of game data + secrets + player roles
+  const updates = {
+    [`rooms/${roomCode}/phase`]: PHASE.LOBBY,
+    [`rooms/${roomCode}/game`]: null,
+    [`roomSecrets/${roomCode}`]: null,
+    [`playerRoles/${roomCode}`]: null,
+  };
+  await update(ref(db), updates);
 }
 
 /** Leave the room */
@@ -440,7 +482,7 @@ export async function leaveRoom() {
 
   await set(ref(db, `rooms/${roomCode}/players/${uid}/connected`), false);
   stopListening();
-  sessionStorage.removeItem('spyfall_room');
-  setState({ roomCode: null, room: null });
+  sessionStorage.removeItem(STORAGE_KEYS.ROOM);
+  setState({ roomCode: null, room: null, myRole: null, roomSecrets: null });
   navigate('home');
 }

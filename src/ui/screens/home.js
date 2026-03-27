@@ -4,15 +4,18 @@ import { isValidRoomCode, normalizeRoomCode } from '../../utils/roomCode.js';
 import { navigate } from '../../router.js';
 import { toggleTheme, getTheme } from '../theme.js';
 import { isCurrentUserAdmin, signInWithGoogle, signOutAdmin, getCurrentEmail } from '../../firebase.js';
+import { STORAGE_KEYS } from '../../constants.js';
+import { iconCrosshair } from '../icons.js';
 
+/** Render the home screen (name input, room code, sign-in). */
 export function renderHome(container) {
-  const savedName = localStorage.getItem('spyfall_name') || '';
+  const savedName = localStorage.getItem(STORAGE_KEYS.PLAYER_NAME) || '';
   const isTerminal = getTheme() === 'terminal';
   const isAdmin = isCurrentUserAdmin();
   const email = getCurrentEmail();
 
   container.innerHTML = `
-    <div class="flex-1 flex flex-col items-center justify-center text-center" role="main">
+    <div class="flex-1 flex flex-col items-center justify-center text-center">
       <div class="absolute top-4 right-4 flex items-center gap-2">
         <button id="themeToggle" class="text-xs px-3 py-1.5 rounded border cursor-pointer ${isTerminal ? 'border-green-500 text-green-400 hover:bg-green-500/10' : 'border-slate-600 text-slate-400 hover:text-cyan-400 hover:border-cyan-400'}" title="Toggle terminal theme" aria-label="Toggle terminal theme">
           ${isTerminal ? '> EXIT TERMINAL' : '> TERMINAL'}
@@ -20,22 +23,16 @@ export function renderHome(container) {
       </div>
 
       <div class="mb-8">
+        <div class="text-cyan-400 mb-4 opacity-80">${iconCrosshair(80)}</div>
         <div class="text-6xl font-mono font-bold text-cyan-400 tracking-tight mb-2">SPYFALL</div>
-        <div class="text-slate-400 text-sm">Find the spy. Protect the location.</div>
+        <div class="text-slate-400 text-sm tracking-wide">Find the spy. Protect the location.</div>
       </div>
 
       <div class="w-full max-w-sm space-y-4">
-        <!-- Auth section -->
-        <div class="text-center mb-2">
-          ${isAdmin
-            ? `<div class="text-xs text-emerald-400 font-mono mb-1">ADMIN: ${sanitize(email)}</div>
-               <button id="signOutBtn" class="text-xs text-slate-500 hover:text-slate-300 underline cursor-pointer">Sign Out</button>`
-            : `<button id="googleSignIn" class="btn-secondary w-full text-sm">Sign in with Google (Admin)</button>
-               <div class="text-xs text-slate-500 mt-1">Admins create rooms. Players just join.</div>`
-          }
-        </div>
+        ${isAdmin ? `<div class="text-center text-xs text-emerald-400 font-mono mb-1">ADMIN: ${sanitize(email)} <button id="signOutBtn" class="text-slate-500 hover:text-slate-300 underline cursor-pointer ml-1">sign out</button></div>` : ''}
 
         <div>
+          <label for="nameInput" class="sr-only">Your name</label>
           <input
             type="text"
             id="nameInput"
@@ -50,6 +47,7 @@ export function renderHome(container) {
         ${isAdmin ? '<button id="createBtn" class="btn-primary w-full">Create Room</button>' : ''}
 
         <div class="flex gap-2">
+          <label for="codeInput" class="sr-only">Room code</label>
           <input
             type="text"
             id="codeInput"
@@ -62,11 +60,16 @@ export function renderHome(container) {
         </div>
       </div>
 
-      <div class="flex items-center gap-4 mt-8">
+      <div class="flex flex-col items-center gap-3 mt-8">
         <button id="rulesBtn" class="text-sm text-slate-400 hover:text-cyan-400 transition-colors underline underline-offset-4 cursor-pointer">
           How to Play
         </button>
-        ${isAdmin ? '<button id="adminBtn" class="text-sm text-emerald-400 hover:text-emerald-300 transition-colors underline underline-offset-4 cursor-pointer font-mono">Admin Dashboard</button>' : ''}
+        <div class="flex items-center gap-4">
+          ${isAdmin
+            ? '<button id="adminBtn" class="text-xs text-emerald-400 hover:text-emerald-300 transition-colors underline underline-offset-4 cursor-pointer font-mono">Admin Dashboard</button>'
+            : '<button id="googleSignIn" class="text-xs text-slate-500 hover:text-slate-400 transition-colors underline underline-offset-4 cursor-pointer">Admin Sign In</button>'
+          }
+        </div>
       </div>
     </div>
   `;
@@ -128,7 +131,7 @@ export function renderHome(container) {
         nameInput.focus();
         return;
       }
-      localStorage.setItem('spyfall_name', name);
+      localStorage.setItem(STORAGE_KEYS.PLAYER_NAME, name);
       createBtn.disabled = true;
       createBtn.textContent = 'Creating...';
       try {
@@ -155,7 +158,7 @@ export function renderHome(container) {
       codeInput.focus();
       return;
     }
-    localStorage.setItem('spyfall_name', name);
+    localStorage.setItem(STORAGE_KEYS.PLAYER_NAME, name);
     joinBtn.disabled = true;
     joinBtn.textContent = 'Joining...';
     try {

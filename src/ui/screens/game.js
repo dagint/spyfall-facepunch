@@ -5,7 +5,11 @@ import { LOCATIONS } from '../../data/locations.js';
 import { createTimer } from '../../utils/timer.js';
 import { play } from '../../audio/sounds.js';
 import { getTheme } from '../theme.js';
+import { getFilteredLocations } from '../../utils/gameHelpers.js';
+import { STORAGE_KEYS } from '../../constants.js';
+import { iconEye, iconDocument } from '../icons.js';
 
+/** Render the active game screen (timer, role card, voting, spy guess). */
 export function renderGame(container) {
   let unsub = null;
   let stopTimer = null;
@@ -13,13 +17,16 @@ export function renderGame(container) {
   let promptsDismissed = false;
   let lastTickSound = 0;
   let activeOverlay = null;
+  let activeKeyHandler = null;
   let lastStateKey = null;
 
   // Try to load crossed-out state from sessionStorage
   try {
-    const saved = sessionStorage.getItem('spyfall_crossed');
+    const saved = sessionStorage.getItem(STORAGE_KEYS.CROSSED_OUT);
     if (saved) crossedOut = new Set(JSON.parse(saved));
-  } catch {}
+  } catch (err) {
+    console.warn('Failed to restore crossed-out state:', err);
+  }
 
   function render() {
     const state = getState();
@@ -28,21 +35,29 @@ export function renderGame(container) {
 
     if (!room || !game) return;
 
+    const myRoleData = state.myRole;
+
+    // Wait for per-player role data to arrive from Firebase listener
+    if (!myRoleData) {
+      container.innerHTML = '<div class="text-center text-slate-400 mt-12 font-mono">Loading dossier...</div>';
+      return;
+    }
+
     // Skip re-render if game state hasn't meaningfully changed
     const stateKey = JSON.stringify({
       votes: game.votes,
       result: game.result,
       exfiltration: game.exfiltration,
+      myRole: myRoleData,
       players: Object.keys(room.players || {}).map(uid => room.players[uid].connected).join(','),
     });
     if (lastStateKey !== null && stateKey === lastStateKey) return;
     lastStateKey = stateKey;
 
-    const isSpy = game.spyId === uid || (game.spyIds && game.spyIds[uid]);
+    const isSpy = myRoleData.isSpy;
     const isCaughtSpy = game.result?.caughtSpies?.includes(uid);
-    const location = game.location || LOCATIONS[game.locationIndex];
-    const myRoleIndex = game.roles?.[uid];
-    const myRole = (!isSpy && myRoleIndex != null) ? location.roles[myRoleIndex] : null;
+    const location = myRoleData.location; // null for spy
+    const myRole = myRoleData.role; // null for spy
     const players = getActivePlayers();
     const codenames = game.codenames || null;
     const isTerminal = getTheme() === 'terminal';
@@ -113,17 +128,19 @@ export function renderGame(container) {
       if (isTerminal) {
         roleCard.innerHTML = `
           <div class="text-xs uppercase tracking-[0.2em] text-rose-400 mb-2 font-mono">$ cat /etc/dossier</div>
+          <div class="text-rose-400 opacity-50 mb-2">${iconEye(36)}</div>
           <div class="text-3xl font-bold text-rose-400 mb-2 font-mono">YOU ARE THE SPY</div>
           ${isCaughtSpy ? '<div class="text-sm text-rose-400 mt-2 font-mono">[CAUGHT] You have been identified.</div>' : ''}
-          ${game.spyHint ? `<div class="text-sm text-amber-400 mt-3 font-mono border border-amber-400/30 px-3 py-2">HINT: ${sanitize(game.spyHint)}</div>` : ''}
+          ${myRoleData.spyHint ? `<div class="text-sm text-amber-400 mt-3 font-mono border border-amber-400/30 px-3 py-2">HINT: ${sanitize(myRoleData.spyHint)}</div>` : ''}
           <div class="text-sm text-slate-400 mt-3 font-mono">You don't know the location.<br/>Listen carefully and blend in.</div>
         `;
       } else {
         roleCard.innerHTML = `
           <div class="text-xs uppercase tracking-[0.2em] text-rose-400 mb-2 font-mono">CLASSIFIED</div>
+          <div class="text-rose-400 opacity-50 mb-2">${iconEye(36)}</div>
           <div class="text-3xl font-bold text-rose-400 mb-2">YOU ARE THE SPY</div>
           ${isCaughtSpy ? '<div class="text-sm text-rose-400 mt-2">[CAUGHT] You have been identified.</div>' : ''}
-          ${game.spyHint ? `<div class="text-sm text-amber-400 mt-3 border border-amber-400/30 px-3 py-2 rounded">HINT: ${sanitize(game.spyHint)}</div>` : ''}
+          ${myRoleData.spyHint ? `<div class="text-sm text-amber-400 mt-3 border border-amber-400/30 px-3 py-2 rounded">HINT: ${sanitize(myRoleData.spyHint)}</div>` : ''}
           <div class="text-sm text-slate-400 mt-3">You don't know the location.<br/>Listen carefully and blend in.</div>
         `;
       }
@@ -131,6 +148,7 @@ export function renderGame(container) {
       if (isTerminal) {
         roleCard.innerHTML = `
           <div class="text-xs uppercase tracking-[0.2em] text-cyan-400 mb-2 font-mono">$ cat /etc/dossier</div>
+          <div class="text-cyan-400 opacity-40 mb-3">${iconDocument(32)}</div>
           <div class="text-lg text-slate-400 mb-1 font-mono">Location</div>
           <div class="text-2xl font-bold text-cyan-400 mb-4 font-mono">${sanitize(location.name)}</div>
           <div class="text-lg text-slate-400 mb-1 font-mono">Your Role</div>
@@ -139,6 +157,7 @@ export function renderGame(container) {
       } else {
         roleCard.innerHTML = `
           <div class="text-xs uppercase tracking-[0.2em] text-cyan-400 mb-2 font-mono">DOSSIER</div>
+          <div class="text-cyan-400 opacity-40 mb-3">${iconDocument(32)}</div>
           <div class="text-lg text-slate-400 mb-1">Location</div>
           <div class="text-2xl font-bold text-cyan-400 mb-4">${sanitize(location.name)}</div>
           <div class="text-lg text-slate-400 mb-1">Your Role</div>
@@ -167,7 +186,7 @@ export function renderGame(container) {
     locSection.appendChild(locTitle);
 
     // Merge standard + custom locations for display
-    const allLocations = getAllLocations(room);
+    const allLocations = getFilteredLocations(room?.settings?.pack || 'all', room?.customLocations);
     const locGrid = renderLocationGrid(allLocations, crossedOut);
     locGrid.addEventListener('click', (e) => {
       const item = e.target.closest('.location-item');
@@ -181,7 +200,7 @@ export function renderGame(container) {
         item.classList.add('location-item-crossed');
       }
       play('click');
-      sessionStorage.setItem('spyfall_crossed', JSON.stringify([...crossedOut]));
+      sessionStorage.setItem(STORAGE_KEYS.CROSSED_OUT, JSON.stringify([...crossedOut]));
     });
     locSection.appendChild(locGrid);
     container.appendChild(locSection);
@@ -208,6 +227,8 @@ export function renderGame(container) {
         voteCard.innerHTML = `<div class="text-sm font-semibold text-slate-300 mb-3">Accuse a Player</div>`;
 
         const voteGrid = el('div', 'space-y-2');
+        voteGrid.setAttribute('aria-live', 'polite');
+        voteGrid.setAttribute('aria-relevant', 'text');
         players.forEach((player) => {
           if (player.uid === uid) return; // Can't vote for yourself
           if (game.result?.caughtSpies?.includes(player.uid)) return; // Skip caught spies
@@ -270,12 +291,21 @@ export function renderGame(container) {
     }
   }
 
-  function removeOverlay(overlay) {
+  let previousFocus = null;
+
+  function removeOverlay(overlay, keyHandler) {
+    if (keyHandler) document.removeEventListener('keydown', keyHandler);
     overlay.remove();
-    if (activeOverlay === overlay) activeOverlay = null;
+    if (activeOverlay === overlay) { activeOverlay = null; activeKeyHandler = null; }
+    // Return focus to element that opened the modal
+    if (previousFocus && previousFocus.isConnected) {
+      previousFocus.focus();
+      previousFocus = null;
+    }
   }
 
   function showGuessModal(container, room) {
+    previousFocus = document.activeElement;
     const overlay = el('div', 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4');
     activeOverlay = overlay;
     const modal = el('div', 'card max-w-sm w-full max-h-[80vh] overflow-y-auto');
@@ -288,7 +318,7 @@ export function renderGame(container) {
       <div class="text-xs text-slate-400 mb-3">Choose carefully — if you're wrong, you lose!</div>
     `;
 
-    const allLocations = getAllLocations(room);
+    const allLocations = getFilteredLocations(room?.settings?.pack || 'all', room?.customLocations);
     const grid = el('div', 'space-y-2');
     allLocations.forEach((loc, i) => {
       const btn = el('button', 'btn-secondary w-full text-left !py-2 text-sm', loc.name);
@@ -296,15 +326,13 @@ export function renderGame(container) {
         btn.disabled = true;
         btn.textContent = 'Guessing...';
         try {
-          // Custom locations use name-based comparison
           if (loc.pack === 'custom') {
             await spyGuessLocation(null, loc.name);
           } else {
-            // Find the actual index in LOCATIONS
             const locIdx = LOCATIONS.findIndex((l) => l.name === loc.name);
             await spyGuessLocation(locIdx);
           }
-          removeOverlay(overlay);
+          removeOverlay(overlay, keyHandler);
         } catch (err) {
           showError(modal, err.message);
           btn.disabled = false;
@@ -316,12 +344,12 @@ export function renderGame(container) {
     modal.appendChild(grid);
 
     const cancelBtn = el('button', 'btn-secondary w-full mt-4', 'Cancel');
-    cancelBtn.addEventListener('click', () => removeOverlay(overlay));
+    cancelBtn.addEventListener('click', () => removeOverlay(overlay, keyHandler));
     modal.appendChild(cancelBtn);
 
     overlay.appendChild(modal);
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) removeOverlay(overlay);
+      if (e.target === overlay) removeOverlay(overlay, keyHandler);
     });
     document.body.appendChild(overlay);
 
@@ -331,10 +359,25 @@ export function renderGame(container) {
 
     const keyHandler = (e) => {
       if (e.key === 'Escape') {
-        removeOverlay(overlay);
-        document.removeEventListener('keydown', keyHandler);
+        removeOverlay(overlay, keyHandler);
+        return;
+      }
+      // Tab focus trap
+      if (e.key === 'Tab') {
+        const focusable = modal.querySelectorAll('button:not([disabled])');
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
+    activeKeyHandler = keyHandler;
     document.addEventListener('keydown', keyHandler);
   }
 
@@ -344,24 +387,10 @@ export function renderGame(container) {
   return () => {
     if (unsub) unsub();
     if (stopTimer) stopTimer();
-    if (activeOverlay) { activeOverlay.remove(); activeOverlay = null; }
-    sessionStorage.removeItem('spyfall_crossed');
+    if (activeOverlay) {
+      if (activeKeyHandler) { document.removeEventListener('keydown', activeKeyHandler); activeKeyHandler = null; }
+      activeOverlay.remove(); activeOverlay = null; previousFocus = null;
+    }
+    sessionStorage.removeItem(STORAGE_KEYS.CROSSED_OUT);
   };
-}
-
-/** Get all locations (standard filtered by pack + custom) */
-function getAllLocations(room) {
-  const pack = room?.settings?.pack || 'all';
-  let locs = LOCATIONS.filter((loc) => {
-    if (pack === 'all') return true;
-    return loc.pack === pack;
-  });
-
-  // Add custom locations
-  if (room?.customLocations) {
-    const customs = Object.values(room.customLocations);
-    locs = [...locs, ...customs];
-  }
-
-  return locs;
 }

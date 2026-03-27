@@ -2,6 +2,7 @@ import { formatTime } from '../utils/timer.js';
 import { getRandomPrompts } from '../data/prompts.js';
 import { isMuted, setMuted, play } from '../audio/sounds.js';
 import { ANIMATION } from '../constants.js';
+import { playerAvatar } from './icons.js';
 
 /** Sanitize a string for safe insertion into innerHTML */
 export function sanitize(str) {
@@ -46,10 +47,17 @@ export function renderPlayerList(container, players, hostUid, codenames = null) 
     const row = el('div', 'flex items-center gap-3 px-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700/50');
     row.setAttribute('role', 'listitem');
 
-    // Status dot
-    const dot = el('div', `w-2.5 h-2.5 rounded-full ${player.connected !== false ? 'bg-emerald-400' : 'bg-slate-500'}`);
+    // Player avatar with online indicator
+    const avatarWrapper = el('div', 'relative shrink-0');
+    avatarWrapper.innerHTML = playerAvatar(player.name || '??', 32);
+    if (player.connected === false) {
+      avatarWrapper.style.opacity = '0.4';
+    }
+    // Small status dot overlaid on avatar
+    const dot = el('div', `absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-slate-800 ${player.connected !== false ? 'bg-emerald-400' : 'bg-slate-500'}`);
     dot.setAttribute('aria-hidden', 'true');
-    row.appendChild(dot);
+    avatarWrapper.appendChild(dot);
+    row.appendChild(avatarWrapper);
 
     // Screen reader status text
     const statusText = el('span', 'sr-only', player.connected !== false ? 'Online' : 'Offline');
@@ -90,7 +98,11 @@ export function renderTimerDisplay(seconds) {
     isDanger ? 'text-rose-400 timer-warning' : isWarning ? 'text-amber-400' : 'text-cyan-400',
   ].join(' ');
 
-  return `<div class="${classes}" role="timer" aria-live="polite" aria-label="Time remaining: ${formatTime(seconds)}">${formatTime(seconds)}</div>`;
+  // Only announce to screen readers at key thresholds to avoid flooding
+  const announceThresholds = [300, 240, 180, 120, 60, 30, 10, 5, 4, 3, 2, 1, 0];
+  const shouldAnnounce = announceThresholds.includes(seconds);
+
+  return `<div class="${classes}" role="timer" ${shouldAnnounce ? 'aria-live="assertive"' : ''} aria-label="Time remaining: ${formatTime(seconds)}">${formatTime(seconds)}</div>`;
 }
 
 /** Render a location grid for reference */
@@ -98,11 +110,22 @@ export function renderLocationGrid(locations, crossedOut = new Set()) {
   const grid = el('div', 'location-grid');
 
   locations.forEach((loc, i) => {
+    const isCrossed = crossedOut.has(i);
     const item = el('div',
-      `location-item cursor-pointer select-none ${crossedOut.has(i) ? 'location-item-crossed' : ''}`,
+      `location-item cursor-pointer select-none ${isCrossed ? 'location-item-crossed' : ''}`,
       loc.name
     );
     item.dataset.index = i;
+    item.setAttribute('role', 'button');
+    item.setAttribute('tabindex', '0');
+    item.setAttribute('aria-pressed', String(isCrossed));
+    item.setAttribute('aria-label', `${loc.name}${isCrossed ? ' (crossed out)' : ''}`);
+    item.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        item.click();
+      }
+    });
     grid.appendChild(item);
   });
 
@@ -228,6 +251,7 @@ export function renderAchievementBadge(achievement) {
 /** Render an achievement toast notification (Phase 2.3) */
 export function renderAchievementToast(achievement) {
   const toast = el('div', 'fixed bottom-4 right-4 z-50 card border-amber-500/50 bg-slate-800 shadow-lg max-w-xs');
+  toast.setAttribute('role', 'alert');
   toast.style.animation = 'fadeIn 0.3s ease-out';
   toast.innerHTML = `
     <div class="flex items-center gap-3">

@@ -1,7 +1,9 @@
 import { el, renderHeader } from '../components.js';
 import { navigate } from '../../router.js';
 import { LOCATIONS, LOCATION_PACKS } from '../../data/locations.js';
+import { iconEye, iconSettings, iconHelpCircle, iconShield, iconLightbulb, iconMapPin } from '../icons.js';
 
+/** Render the "How to Play" rules screen with collapsible location categories. */
 export function renderRules(container) {
   renderHeader(container, 'HOW TO PLAY', () => navigate('home'));
 
@@ -15,7 +17,10 @@ export function renderRules(container) {
   const content = el('div', 'space-y-6 pb-8');
   content.innerHTML = `
     <section class="card">
-      <h2 class="text-lg font-bold text-cyan-400 mb-3">Overview</h2>
+      <div class="flex items-start gap-3 mb-3">
+        <span class="text-cyan-400 shrink-0 mt-0.5">${iconEye(20)}</span>
+        <h2 class="text-lg font-bold text-cyan-400">Overview</h2>
+      </div>
       <p class="text-sm text-slate-300 leading-relaxed">
         Spyfall is a social deduction game for <strong>3-8+ players</strong>. Everyone is assigned a secret
         location and a role — except one player, <strong>the Spy</strong>, who doesn't know where they are.
@@ -27,7 +32,10 @@ export function renderRules(container) {
     </section>
 
     <section class="card">
-      <h2 class="text-lg font-bold text-cyan-400 mb-3">Setup</h2>
+      <div class="flex items-start gap-3 mb-3">
+        <span class="text-cyan-400 shrink-0 mt-0.5">${iconSettings(20)}</span>
+        <h2 class="text-lg font-bold text-cyan-400">Setup</h2>
+      </div>
       <ol class="text-sm text-slate-300 space-y-2 list-decimal list-inside">
         <li>An admin creates a room and shares the 4-letter code</li>
         <li>Other players join using the code</li>
@@ -38,7 +46,10 @@ export function renderRules(container) {
     </section>
 
     <section class="card">
-      <h2 class="text-lg font-bold text-cyan-400 mb-3">Gameplay</h2>
+      <div class="flex items-start gap-3 mb-3">
+        <span class="text-cyan-400 shrink-0 mt-0.5">${iconHelpCircle(20)}</span>
+        <h2 class="text-lg font-bold text-cyan-400">Gameplay</h2>
+      </div>
       <p class="text-sm text-slate-300 leading-relaxed mb-3">
         Players ask each other questions in turns (verbally, in person or over voice chat).
         Questions should be vague enough to not reveal the location to the spy, but specific enough
@@ -56,31 +67,52 @@ export function renderRules(container) {
     </section>
 
     <section class="card">
-      <h2 class="text-lg font-bold text-cyan-400 mb-3">Winning</h2>
+      <div class="flex items-start gap-3 mb-3">
+        <span class="text-cyan-400 shrink-0 mt-0.5">${iconShield(20)}</span>
+        <h2 class="text-lg font-bold text-cyan-400">Winning</h2>
+      </div>
       <div class="space-y-3 text-sm text-slate-300">
-        <div class="flex gap-3">
-          <span class="text-emerald-400 font-bold shrink-0">Players win if:</span>
-          <span>They vote out the Spy (majority vote), or the Spy guesses the wrong location</span>
+        <div class="flex gap-3 items-start">
+          <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 shrink-0 mt-1.5"></span>
+          <div><span class="text-emerald-400 font-bold">Players win if:</span> They vote out the Spy (majority vote), or the Spy guesses the wrong location</div>
         </div>
-        <div class="flex gap-3">
-          <span class="text-rose-400 font-bold shrink-0">Spy wins if:</span>
-          <span>They correctly guess the location, an innocent player gets voted out, or time runs out</span>
+        <div class="flex gap-3 items-start">
+          <span class="inline-block w-2 h-2 rounded-full bg-rose-400 shrink-0 mt-1.5"></span>
+          <div><span class="text-rose-400 font-bold">Spy wins if:</span> They correctly guess the location, an innocent player gets voted out, or time runs out</div>
         </div>
       </div>
     </section>
 
     <section class="card">
-      <h2 class="text-lg font-bold text-cyan-400 mb-3">Pro Tips for Security Pros</h2>
-      <ul class="text-sm text-slate-300 space-y-2">
-        <li><strong class="text-amber-400">As a regular player:</strong> Give answers that are specific enough to prove knowledge but vague enough that the Spy can't identify the location. Think "need-to-know basis."</li>
-        <li><strong class="text-amber-400">As the Spy:</strong> Use your social engineering skills. Mirror others' confidence level. Ask questions that work for multiple locations. Don't be the first to answer in detail.</li>
-        <li><strong class="text-amber-400">Reading the room:</strong> Watch for micro-expressions, hesitation, and overly generic answers. The same threat detection skills you use in incident response work here.</li>
-        <li><strong class="text-amber-400">Meta-strategy:</strong> Experienced players can cross off impossible locations based on others' answers. Use the location reference grid to narrow it down.</li>
+      <div class="flex items-start gap-3 mb-3">
+        <span class="text-amber-400 shrink-0 mt-0.5">${iconLightbulb(20)}</span>
+        <h2 class="text-lg font-bold text-cyan-400">Pro Tips for Security Pros</h2>
+      </div>
+      <ul class="text-sm text-slate-300 space-y-3">
+        <li class="flex gap-3 items-start">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1.5"></span>
+          <div><strong class="text-amber-400">As a regular player:</strong> Give answers that are specific enough to prove knowledge but vague enough that the Spy can't identify the location. Think "need-to-know basis."</div>
+        </li>
+        <li class="flex gap-3 items-start">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1.5"></span>
+          <div><strong class="text-amber-400">As the Spy:</strong> Use your social engineering skills. Mirror others' confidence level. Ask questions that work for multiple locations. Don't be the first to answer in detail.</div>
+        </li>
+        <li class="flex gap-3 items-start">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1.5"></span>
+          <div><strong class="text-amber-400">Reading the room:</strong> Watch for micro-expressions, hesitation, and overly generic answers. The same threat detection skills you use in incident response work here.</div>
+        </li>
+        <li class="flex gap-3 items-start">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1.5"></span>
+          <div><strong class="text-amber-400">Meta-strategy:</strong> Experienced players can cross off impossible locations based on others' answers. Use the location reference grid to narrow it down.</div>
+        </li>
       </ul>
     </section>
 
     <section class="card">
-      <h2 class="text-lg font-bold text-cyan-400 mb-3">Locations (${LOCATIONS.length} total)</h2>
+      <div class="flex items-start gap-3 mb-3">
+        <span class="text-cyan-400 shrink-0 mt-0.5">${iconMapPin(20)}</span>
+        <h2 class="text-lg font-bold text-cyan-400">Locations (${LOCATIONS.length} total)</h2>
+      </div>
       <p class="text-sm text-slate-400 mb-4">
         Locations are organized into ${Object.keys(LOCATION_PACKS).length} packs. The host picks which pack to play with, or selects "All Packs."
       </p>

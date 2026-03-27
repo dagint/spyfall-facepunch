@@ -105,7 +105,8 @@
   box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
 }
 
-@utility btn {
+/* Shared button base (applied via each variant) */
+@utility btn-base {
   padding: 0.75rem 1.5rem;
   border-radius: 0.5rem;
   font-weight: 600;
@@ -113,48 +114,28 @@
   line-height: 1.25rem;
   transition: all 0.15s;
   cursor: pointer;
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 @utility btn-primary {
-  padding: 0.75rem 1.5rem;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  transition: all 0.15s;
-  cursor: pointer;
+  @apply btn-base;
   background-color: var(--color-cyan-500);
   color: var(--color-slate-900);
   &:hover { background-color: var(--color-cyan-400); }
-  &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 @utility btn-danger {
-  padding: 0.75rem 1.5rem;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  transition: all 0.15s;
-  cursor: pointer;
+  @apply btn-base;
   background-color: var(--color-rose-600);
   color: white;
   &:hover { background-color: var(--color-rose-500); }
-  &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 @utility btn-secondary {
-  padding: 0.75rem 1.5rem;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  transition: all 0.15s;
-  cursor: pointer;
+  @apply btn-base;
   background-color: var(--color-slate-700);
   color: var(--color-slate-100);
   &:hover { background-color: var(--color-slate-600); }
-  &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 @utility input {
@@ -434,6 +415,16 @@
 /* Terminal timeline */
 .theme-terminal .timeline-line {
   background-color: #1a3a1a;
+}
+
+/* Focus-visible styles for keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--color-cyan-400);
+  outline-offset: 2px;
+}
+
+.theme-terminal :focus-visible {
+  outline-color: #00ff00;
 }
 
 /* Screen reader only utility */

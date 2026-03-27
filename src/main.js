@@ -11,6 +11,7 @@ import { renderAdmin } from './ui/screens/admin.js';
 import { listenToRoom } from './game/listeners.js';
 import { applyTheme } from './ui/theme.js';
 import { initAudio } from './audio/sounds.js';
+import { STORAGE_KEYS } from './constants.js';
 
 // Register routes
 register('home', renderHome);
@@ -43,7 +44,7 @@ async function init() {
     setState({ uid });
 
     // Check if returning to an active room
-    const savedRoom = sessionStorage.getItem('spyfall_room');
+    const savedRoom = sessionStorage.getItem(STORAGE_KEYS.ROOM);
     if (savedRoom) {
       const { roomCode } = JSON.parse(savedRoom);
       setState({ roomCode });
@@ -56,11 +57,15 @@ async function init() {
       <div class="flex-1 flex items-center justify-center">
         <div class="text-center">
           <div class="text-2xl font-mono font-bold text-rose-400 mb-2">Connection Failed</div>
-          <div class="text-sm text-slate-400 mb-4">${err.message}</div>
-          <button onclick="location.reload()" class="btn-primary">Retry</button>
+          <div class="text-sm text-slate-400 mb-4" id="initError"></div>
+          <button id="retryBtn" class="btn-primary">Retry</button>
         </div>
       </div>
     `;
+    const errorEl = app.querySelector('#initError');
+    if (errorEl) errorEl.textContent = err.message;
+    const retryBtn = app.querySelector('#retryBtn');
+    if (retryBtn) retryBtn.addEventListener('click', () => location.reload());
   }
 }
 

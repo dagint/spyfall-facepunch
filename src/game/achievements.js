@@ -1,16 +1,17 @@
 import { ACHIEVEMENTS } from '../data/achievements.js';
-
-const STORAGE_PREFIX = 'spyfall_achievements_';
+import { isSpy } from '../utils/gameHelpers.js';
+import { ACHIEVEMENT_THRESHOLDS, STORAGE_KEYS, RESULT_TYPE } from '../constants.js';
 
 function getKey(uid) {
-  return `${STORAGE_PREFIX}${uid}`;
+  return `${STORAGE_KEYS.ACHIEVEMENTS_PREFIX}${uid}`;
 }
 
 export function loadAchievements(uid) {
   try {
     const raw = localStorage.getItem(getKey(uid));
     return raw ? JSON.parse(raw) : { unlocked: [], stats: defaultStats() };
-  } catch {
+  } catch (err) {
+    console.warn('Failed to load achievements:', err);
     return { unlocked: [], stats: defaultStats() };
   }
 }
@@ -42,7 +43,8 @@ function defaultStats() {
 export function processGameResult(uid, gameData, result) {
   const data = loadAchievements(uid);
   const stats = data.stats || defaultStats();
-  const wasSpy = gameData.spyId === uid || (gameData.spyIds && gameData.spyIds[uid]);
+  // result contains spyId/spyIds from buildRevealData — gameData (public) does not
+  const wasSpy = isSpy(uid, result);
 
   // Update stats
   stats.gamesPlayed++;
@@ -55,31 +57,31 @@ export function processGameResult(uid, gameData, result) {
   }
 
   // Spy guess win
-  if (wasSpy && result.type === 'guess' && result.correct) {
+  if (wasSpy && result.type === RESULT_TYPE.GUESS && result.correct) {
     stats.spyGuessWins++;
     // Fast spy guess (under 60s)
     if (gameData.startedAt) {
       const elapsed = (result.resolvedAtMs || Date.now()) - gameData.startedAt;
-      if (elapsed < 60000) {
+      if (elapsed < ACHIEVEMENT_THRESHOLDS.FAST_SPY_GUESS_MS) {
         stats.fastSpyGuess++;
       }
     }
   }
 
   // Caught spy via vote
-  if (!wasSpy && result.type === 'vote' && result.isSpy) {
+  if (!wasSpy && result.type === RESULT_TYPE.VOTE && result.isSpy) {
     stats.spyCatches++;
     // "First vote catch" — resolved quickly (under 120s)
     if (result.resolvedAtMs && gameData.startedAt) {
       const elapsed = result.resolvedAtMs - gameData.startedAt;
-      if (elapsed < 120000) {
+      if (elapsed < ACHIEVEMENT_THRESHOLDS.FIRST_VOTE_CATCH_MS) {
         stats.firstVoteCatch++;
       }
     }
   }
 
   // Timeout win as spy
-  if (wasSpy && result.type === 'timeout' && result.winner === 'spy') {
+  if (wasSpy && result.type === RESULT_TYPE.TIMEOUT && result.winner === 'spy') {
     stats.timeoutWins++;
   }
 

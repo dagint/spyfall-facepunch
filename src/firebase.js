@@ -65,8 +65,11 @@ export function getCurrentEmail() {
 export function initAuth() {
   return new Promise((resolve, reject) => {
     signInAnonymously(auth).catch(reject);
-    onAuthStateChanged(auth, (user) => {
-      if (user) resolve(user.uid);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        unsubscribe();
+        resolve(user.uid);
+      }
     });
   });
 }

@@ -1,6 +1,7 @@
 import { LOCATIONS, LOCATION_PACKS } from '../data/locations.js';
 import { assignCodenames } from '../data/codenames.js';
 import { shuffle } from '../utils/shuffle.js';
+import { LIMITS } from '../constants.js';
 
 /**
  * Pick a random location based on the selected pack.
@@ -57,12 +58,12 @@ export function assignRoles(playerUids, spyUids, locationIndex, locationObj = nu
   const spySet = new Set(Array.isArray(spyUids) ? spyUids : [spyUids]);
   const nonSpy = playerUids.filter((uid) => !spySet.has(uid));
 
-  // Shuffle role indices 0..7 and assign
-  const roleIndices = shuffle([0, 1, 2, 3, 4, 5, 6, 7]);
+  // Shuffle role indices and assign
+  const roleIndices = shuffle(Array.from({ length: LIMITS.ROLES_PER_LOCATION }, (_, i) => i));
   const assignments = {};
 
   nonSpy.forEach((uid, i) => {
-    assignments[uid] = roleIndices[i % 8];
+    assignments[uid] = roleIndices[i % LIMITS.ROLES_PER_LOCATION];
   });
 
   // Spies get no role (null)
@@ -128,24 +129,41 @@ export function buildGameState(playerUids, settings) {
     exfiltration = buildExfiltrationState(playerUids.length);
   }
 
-  const gameState = {
-    locationIndex,
-    location: { name: location.name, pack: location.pack, roles: location.roles },
-    spyId: spyUid,
-    spyIds: spyUids,
-    roles,
+  // Public game data (readable by all room members)
+  const publicGame = {
     codenames,
     durationSec: incidentMode ? null : durationSec,
     startedAt: Date.now(),
     votes: null,
     accusation: null,
     spyGuess: null,
-    spyHint,
     exfiltration,
     result: null,
   };
 
-  return gameState;
+  // Secrets (readable only by host, used for vote evaluation)
+  const secrets = {
+    spyId: spyUid,
+    spyIds: spyUids,
+    location: { name: location.name, pack: location.pack, roles: location.roles },
+    locationIndex,
+    roles,
+  };
+
+  // Per-player role data (each player can only read their own)
+  const playerRolesMap = {};
+  playerUids.forEach((uid) => {
+    const isPlayerSpy = spyUids ? !!spyUids[uid] : uid === spyUid;
+    playerRolesMap[uid] = {
+      isSpy: isPlayerSpy,
+      location: isPlayerSpy ? null : { name: location.name, pack: location.pack },
+      role: isPlayerSpy ? null : (location.roles[roles[uid]] || null),
+      roleIndex: roles[uid] ?? null,
+      spyHint: isPlayerSpy ? spyHint : null,
+    };
+  });
+
+  return { publicGame, secrets, playerRoles: playerRolesMap };
 }
 
 /**
