@@ -1,6 +1,6 @@
 import { el, renderHeader, renderPlayerList, renderAchievementBadge, showError, copyToClipboard, sanitize } from '../components.js';
 import { getState, subscribe, isHost, getPlayers, getActivePlayers } from '../../game/state.js';
-import { updateSettings, startGame, leaveRoom, addCustomLocation, removeCustomLocation } from '../../game/actions.js';
+import { updateSettings, startGame, leaveRoom, closeRoom, addCustomLocation, removeCustomLocation } from '../../game/actions.js';
 import { navigate } from '../../router.js';
 import { loadAchievements } from '../../game/achievements.js';
 import { ACHIEVEMENTS } from '../../data/achievements.js';
@@ -300,6 +300,14 @@ export function renderLobby(container) {
         }
       });
       footer.appendChild(startBtn);
+
+      const closeBtn = el('button', 'btn-secondary w-full mt-2 !text-rose-400 !border-rose-500/30 hover:!border-rose-400', 'Close Room');
+      closeBtn.addEventListener('click', async () => {
+        if (!confirm('Close this room? All players will be disconnected.')) return;
+        closeBtn.disabled = true;
+        await closeRoom();
+      });
+      footer.appendChild(closeBtn);
     } else {
       const waiting = el('div', 'text-center text-slate-400 text-sm py-3', 'Waiting for host to start the game...');
       footer.appendChild(waiting);

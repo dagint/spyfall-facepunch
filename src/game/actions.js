@@ -115,15 +115,30 @@ async function logEvent(type, data = {}) {
 }
 
 /**
- * Delete a single non-admin room by code (fire-and-forget safe).
+ * Delete a room and its associated secrets/roles atomically.
  * Works if current user is the host OR is a verified-email admin.
  */
 async function deleteRoom(roomCode) {
   try {
-    await set(ref(db, `rooms/${roomCode}`), null);
+    await update(ref(db), {
+      [`rooms/${roomCode}`]: null,
+      [`roomSecrets/${roomCode}`]: null,
+      [`playerRoles/${roomCode}`]: null,
+    });
   } catch {
     // Ignore — room may already be gone or user lacks permission
   }
+}
+
+/** Close the current room (host only) — deletes room and navigates home */
+export async function closeRoom() {
+  const { uid, roomCode, room } = getState();
+  if (!roomCode || room?.host !== uid) return;
+  stopListening();
+  sessionStorage.removeItem(STORAGE_KEYS.ROOM);
+  setState({ roomCode: null, room: null, myRole: null, roomSecrets: null });
+  await deleteRoom(roomCode);
+  navigate('home');
 }
 
 /**
@@ -140,7 +155,10 @@ export async function cleanupOldRooms() {
       if (!snap.exists()) return;
       const rooms = snap.val();
       const toDelete = Object.entries(rooms)
-        .filter(([, r]) => !r.hostedByAdmin && (r.createdAt || 0) < cutoff)
+        .filter(([, r]) =>
+          (r.createdAt || 0) < cutoff &&
+          (!r.hostedByAdmin || r.phase === PHASE.LOBBY)
+        )
         .map(([code]) => code);
       await Promise.all(toDelete.map(deleteRoom));
     } catch {
