@@ -7,6 +7,7 @@ import { renderLobby } from './ui/screens/lobby.js';
 import { renderGame } from './ui/screens/game.js';
 import { renderResults } from './ui/screens/results.js';
 import { renderRules } from './ui/screens/rules.js';
+import { renderAdmin } from './ui/screens/admin.js';
 import { listenToRoom } from './game/listeners.js';
 import { applyTheme } from './ui/theme.js';
 import { initAudio } from './audio/sounds.js';
@@ -17,6 +18,7 @@ register('lobby', renderLobby);
 register('game', renderGame);
 register('results', renderResults);
 register('rules', renderRules);
+register('admin', renderAdmin);
 
 // Initialize app
 async function init() {

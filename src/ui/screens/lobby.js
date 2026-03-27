@@ -5,6 +5,7 @@ import { navigate } from '../../router.js';
 import { loadAchievements } from '../../game/achievements.js';
 import { ACHIEVEMENTS } from '../../data/achievements.js';
 import { LIMITS } from '../../constants.js';
+import { LOCATION_PACKS } from '../../data/locations.js';
 
 export function renderLobby(container) {
   let unsub = null;
@@ -84,9 +85,10 @@ export function renderLobby(container) {
           <div>
             <label class="text-xs text-slate-400 block mb-1">Location Pack</label>
             <select id="packSelect" class="input !py-2">
-              <option value="all" ${settings.pack === 'all' ? 'selected' : ''}>All (Classic + Tech)</option>
-              <option value="classic" ${settings.pack === 'classic' ? 'selected' : ''}>Classic Only</option>
-              <option value="tech" ${settings.pack === 'tech' ? 'selected' : ''}>Tech/Security Only</option>
+              <option value="all" ${settings.pack === 'all' ? 'selected' : ''}>All Packs</option>
+              ${Object.entries(LOCATION_PACKS).map(([id, label]) =>
+                `<option value="${id}" ${settings.pack === id ? 'selected' : ''}>${label}</option>`
+              ).join('')}
             </select>
           </div>
 
@@ -238,7 +240,7 @@ export function renderLobby(container) {
 
     } else {
       // Non-host: show current settings
-      const packLabel = settings.pack === 'all' ? 'All' : settings.pack === 'classic' ? 'Classic' : 'Tech';
+      const packLabel = settings.pack === 'all' ? 'All Packs' : (LOCATION_PACKS[settings.pack] || settings.pack);
       const durLabel = settings.incidentMode ? 'Incident Mode' : `${Math.floor(settings.durationSec / 60)} min`;
       const infoSection = el('div', 'card mb-4 text-sm text-slate-400');
       let infoHTML = `

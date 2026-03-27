@@ -1,9 +1,16 @@
 import { el, renderHeader } from '../components.js';
 import { navigate } from '../../router.js';
-import { LOCATIONS } from '../../data/locations.js';
+import { LOCATIONS, LOCATION_PACKS } from '../../data/locations.js';
 
 export function renderRules(container) {
   renderHeader(container, 'HOW TO PLAY', () => navigate('home'));
+
+  // Group locations by pack
+  const byPack = {};
+  LOCATIONS.forEach((loc) => {
+    if (!byPack[loc.pack]) byPack[loc.pack] = [];
+    byPack[loc.pack].push(loc);
+  });
 
   const content = el('div', 'space-y-6 pb-8');
   content.innerHTML = `
@@ -22,7 +29,7 @@ export function renderRules(container) {
     <section class="card">
       <h2 class="text-lg font-bold text-cyan-400 mb-3">Setup</h2>
       <ol class="text-sm text-slate-300 space-y-2 list-decimal list-inside">
-        <li>One player creates a room and shares the 4-letter code</li>
+        <li>An admin creates a room and shares the 4-letter code</li>
         <li>Other players join using the code</li>
         <li>The host configures the timer (3-12 minutes) and location pack</li>
         <li>The host starts the game when 3+ players are ready</li>
@@ -73,20 +80,43 @@ export function renderRules(container) {
     </section>
 
     <section class="card">
-      <h2 class="text-lg font-bold text-cyan-400 mb-3">Location Reference</h2>
-      <p class="text-sm text-slate-400 mb-3">
-        The game includes ${LOCATIONS.length} locations across Classic and Tech/Security packs:
+      <h2 class="text-lg font-bold text-cyan-400 mb-3">Locations (${LOCATIONS.length} total)</h2>
+      <p class="text-sm text-slate-400 mb-4">
+        Locations are organized into ${Object.keys(LOCATION_PACKS).length} packs. The host picks which pack to play with, or selects "All Packs."
       </p>
-      <div class="grid grid-cols-2 gap-2">
-        ${LOCATIONS.map((loc) => `
-          <div class="text-xs px-3 py-2 rounded-md bg-slate-700/50 text-slate-300 border border-slate-600/50">
-            <span>${loc.name}</span>
-            <span class="text-slate-500 ml-1">${loc.pack === 'tech' ? '[Tech]' : ''}</span>
+      ${Object.entries(LOCATION_PACKS).map(([packId, packLabel]) => {
+        const locs = byPack[packId] || [];
+        if (locs.length === 0) return '';
+        return `
+          <div class="mb-4">
+            <button class="pack-toggle flex items-center justify-between w-full text-left cursor-pointer" data-pack="${packId}">
+              <span class="text-sm font-semibold text-slate-200 font-mono">${packLabel} <span class="text-slate-500 font-normal">(${locs.length})</span></span>
+              <span class="text-xs text-slate-500 pack-arrow" data-pack="${packId}">Show</span>
+            </button>
+            <div class="pack-list hidden mt-2 grid grid-cols-2 gap-1.5" data-pack="${packId}">
+              ${locs.map((loc) => `
+                <div class="text-xs px-3 py-1.5 rounded-md bg-slate-700/50 text-slate-300 border border-slate-600/50">${loc.name}</div>
+              `).join('')}
+            </div>
           </div>
-        `).join('')}
-      </div>
+        `;
+      }).join('')}
     </section>
   `;
 
   container.appendChild(content);
+
+  // Toggle handlers for pack sections
+  content.querySelectorAll('.pack-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const packId = btn.dataset.pack;
+      const list = content.querySelector(`.pack-list[data-pack="${packId}"]`);
+      const arrow = content.querySelector(`.pack-arrow[data-pack="${packId}"]`);
+      if (list) {
+        const isHidden = list.classList.contains('hidden');
+        list.classList.toggle('hidden');
+        if (arrow) arrow.textContent = isHidden ? 'Hide' : 'Show';
+      }
+    });
+  });
 }

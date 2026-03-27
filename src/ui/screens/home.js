@@ -1,17 +1,19 @@
 import { el, showError, sanitize } from '../components.js';
 import { createRoom, joinRoom } from '../../game/actions.js';
-import { getState, setState } from '../../game/state.js';
 import { isValidRoomCode, normalizeRoomCode } from '../../utils/roomCode.js';
 import { navigate } from '../../router.js';
 import { toggleTheme, getTheme } from '../theme.js';
+import { isCurrentUserAdmin, signInWithGoogle, signOutAdmin, getCurrentEmail } from '../../firebase.js';
 
 export function renderHome(container) {
   const savedName = localStorage.getItem('spyfall_name') || '';
   const isTerminal = getTheme() === 'terminal';
+  const isAdmin = isCurrentUserAdmin();
+  const email = getCurrentEmail();
 
   container.innerHTML = `
     <div class="flex-1 flex flex-col items-center justify-center text-center" role="main">
-      <div class="absolute top-4 right-4">
+      <div class="absolute top-4 right-4 flex items-center gap-2">
         <button id="themeToggle" class="text-xs px-3 py-1.5 rounded border cursor-pointer ${isTerminal ? 'border-green-500 text-green-400 hover:bg-green-500/10' : 'border-slate-600 text-slate-400 hover:text-cyan-400 hover:border-cyan-400'}" title="Toggle terminal theme" aria-label="Toggle terminal theme">
           ${isTerminal ? '> EXIT TERMINAL' : '> TERMINAL'}
         </button>
@@ -23,6 +25,16 @@ export function renderHome(container) {
       </div>
 
       <div class="w-full max-w-sm space-y-4">
+        <!-- Auth section -->
+        <div class="text-center mb-2">
+          ${isAdmin
+            ? `<div class="text-xs text-emerald-400 font-mono mb-1">ADMIN: ${sanitize(email)}</div>
+               <button id="signOutBtn" class="text-xs text-slate-500 hover:text-slate-300 underline cursor-pointer">Sign Out</button>`
+            : `<button id="googleSignIn" class="btn-secondary w-full text-sm">Sign in with Google (Admin)</button>
+               <div class="text-xs text-slate-500 mt-1">Admins create rooms. Players just join.</div>`
+          }
+        </div>
+
         <div>
           <input
             type="text"
@@ -35,7 +47,7 @@ export function renderHome(container) {
           />
         </div>
 
-        <button id="createBtn" class="btn-primary w-full">Create Room</button>
+        ${isAdmin ? '<button id="createBtn" class="btn-primary w-full">Create Room</button>' : ''}
 
         <div class="flex gap-2">
           <input
@@ -50,9 +62,12 @@ export function renderHome(container) {
         </div>
       </div>
 
-      <button id="rulesBtn" class="mt-8 text-sm text-slate-400 hover:text-cyan-400 transition-colors underline underline-offset-4 cursor-pointer">
-        How to Play
-      </button>
+      <div class="flex items-center gap-4 mt-8">
+        <button id="rulesBtn" class="text-sm text-slate-400 hover:text-cyan-400 transition-colors underline underline-offset-4 cursor-pointer">
+          How to Play
+        </button>
+        ${isAdmin ? '<button id="adminBtn" class="text-sm text-emerald-400 hover:text-emerald-300 transition-colors underline underline-offset-4 cursor-pointer font-mono">Admin Dashboard</button>' : ''}
+      </div>
     </div>
   `;
 
@@ -62,6 +77,9 @@ export function renderHome(container) {
   const joinBtn = container.querySelector('#joinBtn');
   const rulesBtn = container.querySelector('#rulesBtn');
   const themeToggle = container.querySelector('#themeToggle');
+  const googleSignIn = container.querySelector('#googleSignIn');
+  const signOutBtn = container.querySelector('#signOutBtn');
+  const adminBtn = container.querySelector('#adminBtn');
 
   // Auto-uppercase room code
   codeInput.addEventListener('input', () => {
@@ -71,31 +89,59 @@ export function renderHome(container) {
   // Theme toggle
   themeToggle.addEventListener('click', () => {
     toggleTheme();
-    // Re-render to update button text
     const newTheme = getTheme();
     themeToggle.textContent = newTheme === 'terminal' ? '> EXIT TERMINAL' : '> TERMINAL';
     themeToggle.className = `text-xs px-3 py-1.5 rounded border cursor-pointer ${newTheme === 'terminal' ? 'border-green-500 text-green-400 hover:bg-green-500/10' : 'border-slate-600 text-slate-400 hover:text-cyan-400 hover:border-cyan-400'}`;
   });
 
-  createBtn.addEventListener('click', async () => {
-    const name = nameInput.value.trim();
-    if (!name) {
-      showError(container, 'Please enter your name');
-      nameInput.focus();
-      return;
-    }
-    localStorage.setItem('spyfall_name', name);
-    createBtn.disabled = true;
-    createBtn.textContent = 'Creating...';
-    try {
-      await createRoom(name);
-    } catch (err) {
-      showError(container, err.message);
-      createBtn.disabled = false;
-      createBtn.textContent = 'Create Room';
-    }
-  });
+  // Google Sign-In
+  if (googleSignIn) {
+    googleSignIn.addEventListener('click', async () => {
+      googleSignIn.disabled = true;
+      googleSignIn.textContent = 'Signing in...';
+      try {
+        await signInWithGoogle();
+        // Re-render to show admin UI
+        renderHome(container);
+      } catch (err) {
+        showError(container, err.message);
+        googleSignIn.disabled = false;
+        googleSignIn.textContent = 'Sign in with Google (Admin)';
+      }
+    });
+  }
 
+  // Sign out
+  if (signOutBtn) {
+    signOutBtn.addEventListener('click', async () => {
+      await signOutAdmin();
+      renderHome(container);
+    });
+  }
+
+  // Create room (admin only)
+  if (createBtn) {
+    createBtn.addEventListener('click', async () => {
+      const name = nameInput.value.trim();
+      if (!name) {
+        showError(container, 'Please enter your name');
+        nameInput.focus();
+        return;
+      }
+      localStorage.setItem('spyfall_name', name);
+      createBtn.disabled = true;
+      createBtn.textContent = 'Creating...';
+      try {
+        await createRoom(name);
+      } catch (err) {
+        showError(container, err.message);
+        createBtn.disabled = false;
+        createBtn.textContent = 'Create Room';
+      }
+    });
+  }
+
+  // Join room (anyone)
   joinBtn.addEventListener('click', async () => {
     const name = nameInput.value.trim();
     if (!name) {
@@ -122,4 +168,8 @@ export function renderHome(container) {
   });
 
   rulesBtn.addEventListener('click', () => navigate('rules'));
+
+  if (adminBtn) {
+    adminBtn.addEventListener('click', () => navigate('admin'));
+  }
 }

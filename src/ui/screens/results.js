@@ -210,6 +210,39 @@ export function renderResults(container) {
       container.appendChild(timelineCard);
     }
 
+    // Post-game mini stats for all players
+    const statsCard = el('div', 'card mb-4');
+    statsCard.innerHTML = `<div class="text-sm font-semibold text-slate-300 mb-3 font-mono">GAME STATS</div>`;
+    const statsGrid = el('div', 'grid grid-cols-2 gap-3 text-center');
+
+    const durationMs = game.result.resolvedAtMs && game.startedAt
+      ? game.result.resolvedAtMs - game.startedAt
+      : null;
+    const durationStr = durationMs ? `${Math.floor(durationMs / 60000)}m ${Math.floor((durationMs % 60000) / 1000)}s` : '—';
+
+    const resultTypeLabels = { vote: 'Vote', guess: 'Spy Guess', timeout: 'Timeout', exfiltration: 'Exfiltration' };
+
+    statsGrid.innerHTML = `
+      <div class="bg-slate-700/30 rounded-lg p-2">
+        <div class="text-xs text-slate-500">Duration</div>
+        <div class="text-sm font-mono text-slate-200">${durationStr}</div>
+      </div>
+      <div class="bg-slate-700/30 rounded-lg p-2">
+        <div class="text-xs text-slate-500">Ended By</div>
+        <div class="text-sm font-mono text-slate-200">${resultTypeLabels[result.type] || result.type}</div>
+      </div>
+      <div class="bg-slate-700/30 rounded-lg p-2">
+        <div class="text-xs text-slate-500">Players</div>
+        <div class="text-sm font-mono text-slate-200">${players.length}</div>
+      </div>
+      <div class="bg-slate-700/30 rounded-lg p-2">
+        <div class="text-xs text-slate-500">Location Pack</div>
+        <div class="text-sm font-mono text-slate-200">${sanitize(location.pack || 'all')}</div>
+      </div>
+    `;
+    statsCard.appendChild(statsGrid);
+    container.appendChild(statsCard);
+
     // Actions (always visible immediately)
     const actionsDiv = el('div', 'mt-auto pt-4 space-y-3');
 

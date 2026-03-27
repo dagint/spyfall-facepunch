@@ -6,6 +6,7 @@ import {
   update,
   onDisconnect,
   push,
+  isCurrentUserAdmin,
 } from '../firebase.js';
 import { getState, setState } from './state.js';
 import { generateRoomCode } from '../utils/roomCode.js';
@@ -15,6 +16,56 @@ import { navigate } from '../router.js';
 import { getActivePlayers } from './state.js';
 import { listenToRoom, stopListening } from './listeners.js';
 import { LIMITS } from '../constants.js';
+
+/** Persist detailed game history for dashboard analytics */
+async function persistGameHistory(roomCode) {
+  try {
+    const snap = await get(ref(db, `rooms/${roomCode}`));
+    if (!snap.exists()) return;
+    const room = snap.val();
+    const game = room.game;
+    if (!game || !game.result) return;
+
+    const players = room.players || {};
+    const location = game.location || LOCATIONS[game.locationIndex] || {};
+    const spyUids = game.spyIds ? Object.keys(game.spyIds) : (game.spyId ? [game.spyId] : []);
+
+    const historyEntry = {
+      roomCode,
+      completedAt: Date.now(),
+      startedAt: game.startedAt || null,
+      durationMs: game.startedAt ? Date.now() - game.startedAt : null,
+      playerCount: Object.keys(players).length,
+      location: location.name || 'Unknown',
+      locationPack: location.pack || 'unknown',
+      result: {
+        type: game.result.type,
+        winner: game.result.winner,
+        accused: game.result.accused || null,
+        guessedLocation: game.result.guessedLocation || null,
+        correct: game.result.correct ?? null,
+        caughtSpies: game.result.caughtSpies || null,
+      },
+      settings: room.settings || {},
+      players: Object.entries(players).reduce((acc, [uid, p]) => {
+        acc[uid] = {
+          name: p.name,
+          wasSpy: spyUids.includes(uid),
+          role: game.roles?.[uid] != null ? (location.roles?.[game.roles[uid]] || `Role ${game.roles[uid]}`) : null,
+          codename: game.codenames?.[uid] || null,
+        };
+        return acc;
+      }, {}),
+      spyIds: spyUids,
+      events: game.events ? Object.values(game.events).sort((a, b) => a.ts - b.ts) : [],
+      exfiltration: game.exfiltration || null,
+    };
+
+    await push(ref(db, 'gameHistory'), historyEntry);
+  } catch {
+    // Non-critical — don't block game flow
+  }
+}
 
 /** Log a game event to the timeline (Phase 2.2) */
 async function logEvent(type, data = {}) {
@@ -28,8 +79,11 @@ async function logEvent(type, data = {}) {
   }
 }
 
-/** Create a new room and join as host */
+/** Create a new room and join as host (admin only) */
 export async function createRoom(playerName) {
+  if (!isCurrentUserAdmin()) {
+    throw new Error('Only admins can create rooms. Sign in with Google first.');
+  }
   const { uid } = getState();
   let roomCode = generateRoomCode();
 
@@ -219,6 +273,7 @@ export async function evaluateVotes() {
           },
         });
         await set(ref(db, `rooms/${roomCode}/phase`), 'results');
+        persistGameHistory(roomCode);
       } else {
         await update(ref(db, `rooms/${roomCode}/game`), {
           exfiltration: { ...exf, progress: newProgress },
@@ -241,6 +296,7 @@ export async function evaluateVotes() {
       },
     });
     await set(ref(db, `rooms/${roomCode}/phase`), 'results');
+    persistGameHistory(roomCode);
     logEvent('majority', { target });
   }
 
@@ -287,6 +343,7 @@ export async function spyGuessLocation(locationIndex, locationName = null) {
     },
   });
   await set(ref(db, `rooms/${roomCode}/phase`), 'results');
+  persistGameHistory(roomCode);
   logEvent('spy_guess', { actor: uid, guessedLocation: guessedName });
 }
 
@@ -304,6 +361,7 @@ export async function handleTimerExpiry() {
     },
   });
   await set(ref(db, `rooms/${roomCode}/phase`), 'results');
+  persistGameHistory(roomCode);
   logEvent('timeout', {});
 }
 
@@ -333,6 +391,7 @@ export async function advanceRound() {
         },
       });
       await set(ref(db, `rooms/${roomCode}/phase`), 'results');
+      persistGameHistory(roomCode);
     } else {
       await update(ref(db, `rooms/${roomCode}/game/exfiltration`), {
         progress: newProgress,

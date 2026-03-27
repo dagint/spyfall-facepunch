@@ -1,4 +1,4 @@
-import { LOCATIONS } from '../data/locations.js';
+import { LOCATIONS, LOCATION_PACKS } from '../data/locations.js';
 import { assignCodenames } from '../data/codenames.js';
 import { shuffle } from '../utils/shuffle.js';
 
@@ -84,7 +84,7 @@ export function generateSpyHint(location, hintType) {
     return `First letter: "${location.name[0].toUpperCase()}"`;
   }
   if (hintType === 'category') {
-    const packLabel = location.pack === 'tech' ? 'Tech/Security' : location.pack === 'classic' ? 'Classic' : location.pack;
+    const packLabel = LOCATION_PACKS[location.pack] || location.pack;
     return `Category: ${packLabel}`;
   }
   return '';

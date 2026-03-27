@@ -49,6 +49,17 @@
             }
           }
         }
+      },
+
+      ".read": "auth != null && auth.token.email != null && auth.token.email_verified === true"
+    },
+
+    "gameHistory": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email_verified === true",
+      ".write": "auth != null",
+      "$gameId": {
+        ".write": "auth != null && !data.exists()",
+        ".validate": "newData.hasChildren(['roomCode', 'completedAt', 'result'])"
       }
     }
   }
