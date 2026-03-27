@@ -1,6 +1,7 @@
 import { formatTime } from '../utils/timer.js';
 import { getRandomPrompts } from '../data/prompts.js';
 import { isMuted, setMuted, play } from '../audio/sounds.js';
+import { ANIMATION } from '../constants.js';
 
 /** Sanitize a string for safe insertion into innerHTML */
 export function sanitize(str) {
@@ -39,13 +40,20 @@ export function renderHeader(container, title, onBack = null) {
 /** Render a player list with optional codenames */
 export function renderPlayerList(container, players, hostUid, codenames = null) {
   const list = el('div', 'space-y-2');
+  list.setAttribute('role', 'list');
 
   players.forEach((player) => {
     const row = el('div', 'flex items-center gap-3 px-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700/50');
+    row.setAttribute('role', 'listitem');
 
     // Status dot
     const dot = el('div', `w-2.5 h-2.5 rounded-full ${player.connected !== false ? 'bg-emerald-400' : 'bg-slate-500'}`);
+    dot.setAttribute('aria-hidden', 'true');
     row.appendChild(dot);
+
+    // Screen reader status text
+    const statusText = el('span', 'sr-only', player.connected !== false ? 'Online' : 'Offline');
+    row.appendChild(statusText);
 
     // Name (with optional codename)
     const displayName = codenames && codenames[player.uid]
@@ -82,7 +90,7 @@ export function renderTimerDisplay(seconds) {
     isDanger ? 'text-rose-400 timer-warning' : isWarning ? 'text-amber-400' : 'text-cyan-400',
   ].join(' ');
 
-  return `<div class="${classes}">${formatTime(seconds)}</div>`;
+  return `<div class="${classes}" role="timer" aria-live="polite" aria-label="Time remaining: ${formatTime(seconds)}">${formatTime(seconds)}</div>`;
 }
 
 /** Render a location grid for reference */
@@ -107,10 +115,24 @@ export function showError(container, message) {
   const existing = container.querySelector('.error-msg');
   if (existing) existing.remove();
 
-  const errorDiv = el('div', 'error-msg bg-rose-500/20 border border-rose-500/50 text-rose-300 text-sm px-4 py-3 rounded-lg mb-4', message);
+  const errorDiv = el('div', 'error-msg bg-rose-500/20 border border-rose-500/50 text-rose-300 text-sm px-4 py-3 rounded-lg mb-4');
+  errorDiv.setAttribute('role', 'alert');
+  errorDiv.style.display = 'flex';
+  errorDiv.style.alignItems = 'center';
+  errorDiv.style.justifyContent = 'space-between';
+
+  const msgSpan = el('span', '', '');
+  msgSpan.textContent = message;
+  errorDiv.appendChild(msgSpan);
+
+  const closeBtn = el('button', 'ml-2 text-rose-300 hover:text-white cursor-pointer font-bold', '\u00D7');
+  closeBtn.setAttribute('aria-label', 'Dismiss error');
+  closeBtn.addEventListener('click', () => errorDiv.remove());
+  errorDiv.appendChild(closeBtn);
+
   container.prepend(errorDiv);
 
-  setTimeout(() => errorDiv.remove(), 5000);
+  setTimeout(() => errorDiv.remove(), 8000);
 }
 
 /** Copy text to clipboard with visual feedback */
@@ -134,6 +156,8 @@ export async function copyToClipboard(text, button) {
 /** Render prompt suggestions panel (Phase 1.1) */
 export function renderPromptSuggestions(pack, onDismiss, onShuffle) {
   const wrapper = el('div', 'card mb-4 border-slate-700/50');
+  wrapper.setAttribute('role', 'complementary');
+  wrapper.setAttribute('aria-label', 'Conversation starters');
   const header = el('div', 'flex items-center justify-between mb-2');
   header.innerHTML = `<span class="text-xs text-slate-400 uppercase tracking-wider">Conversation Starters</span>`;
 
@@ -167,10 +191,14 @@ export function renderPromptSuggestions(pack, onDismiss, onShuffle) {
 export function renderMuteToggle() {
   const btn = el('button', 'text-xs px-2 py-1 rounded text-slate-400 hover:text-slate-200 cursor-pointer');
   btn.textContent = isMuted() ? 'UNMUTE' : 'MUTE';
+  btn.setAttribute('aria-label', isMuted() ? 'Unmute sound effects' : 'Mute sound effects');
+  btn.setAttribute('aria-pressed', String(isMuted()));
   btn.addEventListener('click', () => {
     const newMuted = !isMuted();
     setMuted(newMuted);
     btn.textContent = newMuted ? 'UNMUTE' : 'MUTE';
+    btn.setAttribute('aria-label', newMuted ? 'Unmute sound effects' : 'Mute sound effects');
+    btn.setAttribute('aria-pressed', String(newMuted));
     if (!newMuted) play('click');
   });
   return btn;
@@ -181,8 +209,8 @@ export function wrapRedacted(element, delayMs = 0) {
   const wrapper = el('div', 'redacted');
   wrapper.style.display = 'inline-block';
   const bar = el('div', 'redacted-bar');
-  bar.style.animation = `declassify ${1.2}s ease-out ${delayMs}ms forwards`;
-  element.style.animation = `declassifyText ${1.2}s ease-out ${delayMs}ms forwards`;
+  bar.style.animation = `declassify ${ANIMATION.REDACT_DURATION / 1000}s ease-out ${delayMs}ms forwards`;
+  element.style.animation = `declassifyText ${ANIMATION.REDACT_DURATION / 1000}s ease-out ${delayMs}ms forwards`;
   element.style.opacity = '0';
   wrapper.appendChild(element);
   wrapper.appendChild(bar);
@@ -216,7 +244,7 @@ export function renderAchievementToast(achievement) {
     toast.style.opacity = '0';
     toast.style.transition = 'opacity 0.3s';
     setTimeout(() => toast.remove(), 300);
-  }, 4000);
+  }, ANIMATION.ACHIEVEMENT_TOAST_DURATION);
   return toast;
 }
 

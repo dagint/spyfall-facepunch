@@ -1,5 +1,6 @@
 import { LOCATIONS } from '../data/locations.js';
 import { assignCodenames } from '../data/codenames.js';
+import { shuffle } from '../utils/shuffle.js';
 
 /**
  * Pick a random location based on the selected pack.
@@ -185,12 +186,3 @@ export function checkMajority(votes, totalPlayers) {
   return { reached: false, target: null, count: 0 };
 }
 
-/** Fisher-Yates shuffle */
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}

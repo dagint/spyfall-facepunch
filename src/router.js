@@ -1,4 +1,5 @@
 const routes = {};
+let pendingParams = null;
 let currentCleanup = null;
 
 /** Register a route handler: register('home', (container, params) => { ... return cleanup }) */
@@ -16,15 +17,15 @@ export function navigate(name, params = {}) {
     renderRoute(name, params);
   }
   // Store params for hash-change driven navigation
-  navigate._pendingParams = params;
+  pendingParams = params;
 }
 
 /** Start listening for hash changes */
 export function startRouter() {
   window.addEventListener('hashchange', () => {
     const name = window.location.hash.slice(1) || 'home';
-    const params = navigate._pendingParams || {};
-    navigate._pendingParams = null;
+    const params = pendingParams || {};
+    pendingParams = null;
     renderRoute(name, params);
   });
 

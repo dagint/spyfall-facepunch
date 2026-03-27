@@ -1,3 +1,5 @@
+import { shuffle } from '../utils/shuffle.js';
+
 export const UNIVERSAL_PROMPTS = [
   'What time of day would you typically be there?',
   'How many people are usually around?',
@@ -68,11 +70,6 @@ export function getRandomPrompts(pack = 'all', count = 3) {
     pool = [...UNIVERSAL_PROMPTS, ...TECH_PROMPTS, ...CLASSIC_PROMPTS];
   }
 
-  // Fisher-Yates shuffle and take first `count`
-  const shuffled = [...pool];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
+  const shuffled = shuffle(pool);
   return shuffled.slice(0, count);
 }

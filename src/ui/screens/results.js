@@ -4,6 +4,7 @@ import { playAgain, leaveRoom } from '../../game/actions.js';
 import { LOCATIONS } from '../../data/locations.js';
 import { processGameResult } from '../../game/achievements.js';
 import { play } from '../../audio/sounds.js';
+import { ANIMATION } from '../../constants.js';
 
 export function renderResults(container) {
   let unsub = null;
@@ -39,7 +40,7 @@ export function renderResults(container) {
 
     // Play reveal sound
     if (shouldAnimate) {
-      setTimeout(() => play('reveal'), 200);
+      setTimeout(() => play('reveal'), ANIMATION.REVEAL_SOUND_DELAY);
     }
 
     // Process achievements (once)
@@ -48,7 +49,7 @@ export function renderResults(container) {
       try {
         const newAchievements = processGameResult(uid, game, result);
         newAchievements.forEach((ach, i) => {
-          setTimeout(() => renderAchievementToast(ach), 2500 + i * 1500);
+          setTimeout(() => renderAchievementToast(ach), ANIMATION.ACHIEVEMENT_TOAST_BASE_DELAY + i * ANIMATION.ACHIEVEMENT_TOAST_STAGGER);
         });
       } catch {}
     }
@@ -70,7 +71,7 @@ export function renderResults(container) {
           lbl.textContent = 'DECLASSIFIED';
           lbl.className = 'text-xs uppercase tracking-[0.3em] text-amber-400 font-mono';
         }
-      }, 800);
+      }, ANIMATION.CLASSIFIED_TRANSITION_DELAY);
     } else {
       classifiedHeader.innerHTML = `<div class="text-xs uppercase tracking-[0.3em] text-amber-400 font-mono">DECLASSIFIED</div>`;
     }
@@ -78,6 +79,7 @@ export function renderResults(container) {
 
     // Result header
     const banner = el('div', `card mb-6 text-center ${result.winner === 'spy' ? 'border-rose-500' : 'border-emerald-500'}`);
+    banner.setAttribute('role', 'banner');
 
     let title, subtitle;
     if (result.type === 'vote') {
@@ -124,7 +126,7 @@ export function renderResults(container) {
     const spyNameEl = el('div', 'text-xl font-bold text-rose-400', spyNames);
     spyReveal.appendChild(spyLabel);
     if (shouldAnimate) {
-      spyReveal.appendChild(wrapRedacted(spyNameEl, 1000));
+      spyReveal.appendChild(wrapRedacted(spyNameEl, ANIMATION.SPY_REVEAL_DELAY));
     } else {
       spyReveal.appendChild(spyNameEl);
     }
@@ -136,7 +138,7 @@ export function renderResults(container) {
     const locNameEl = el('div', 'text-xl font-bold text-cyan-400', location.name);
     locReveal.appendChild(locLabel);
     if (shouldAnimate) {
-      locReveal.appendChild(wrapRedacted(locNameEl, 1600));
+      locReveal.appendChild(wrapRedacted(locNameEl, ANIMATION.LOCATION_REVEAL_DELAY));
     } else {
       locReveal.appendChild(locNameEl);
     }
@@ -165,7 +167,7 @@ export function renderResults(container) {
       `;
 
       if (shouldAnimate) {
-        const wrapped = wrapRedacted(row, 2000 + players.indexOf(player) * 200);
+        const wrapped = wrapRedacted(row, ANIMATION.ROLES_REVEAL_BASE_DELAY + players.indexOf(player) * ANIMATION.ROLES_REVEAL_STAGGER);
         wrapped.style.display = 'block';
         rolesList.appendChild(wrapped);
       } else {
@@ -179,6 +181,9 @@ export function renderResults(container) {
     if (game.events) {
       const timelineCard = el('div', 'card mb-4');
       const timelineHeader = el('div', 'flex items-center justify-between mb-3 cursor-pointer');
+      timelineHeader.setAttribute('role', 'button');
+      timelineHeader.setAttribute('aria-expanded', 'false');
+      timelineHeader.setAttribute('aria-label', 'Toggle incident timeline');
       timelineHeader.innerHTML = `
         <span class="text-sm font-semibold text-slate-300 font-mono">INCIDENT TIMELINE // POST-MORTEM</span>
         <span class="text-xs text-slate-500" id="timelineToggle">Show</span>
@@ -197,6 +202,7 @@ export function renderResults(container) {
       timelineHeader.addEventListener('click', () => {
         const isHidden = timelineBody.style.display === 'none';
         timelineBody.style.display = isHidden ? 'block' : 'none';
+        timelineHeader.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
         const toggle = timelineCard.querySelector('#timelineToggle');
         if (toggle) toggle.textContent = isHidden ? 'Hide' : 'Show';
       });

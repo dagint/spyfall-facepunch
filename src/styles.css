@@ -367,7 +367,11 @@
 }
 
 .theme-terminal .text-slate-400 {
-  color: #008800 !important;
+  color: #33cc33 !important;
+}
+
+.theme-terminal .text-slate-500 {
+  color: #22aa22 !important;
 }
 
 .theme-terminal .text-slate-300,
@@ -430,4 +434,17 @@
 /* Terminal timeline */
 .theme-terminal .timeline-line {
   background-color: #1a3a1a;
+}
+
+/* Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }

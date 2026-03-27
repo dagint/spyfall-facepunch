@@ -4,6 +4,7 @@ import { updateSettings, startGame, leaveRoom, addCustomLocation, removeCustomLo
 import { navigate } from '../../router.js';
 import { loadAchievements } from '../../game/achievements.js';
 import { ACHIEVEMENTS } from '../../data/achievements.js';
+import { LIMITS } from '../../constants.js';
 
 export function renderLobby(container) {
   let unsub = null;
@@ -92,7 +93,7 @@ export function renderLobby(container) {
           <!-- Hacker Mode (Phase 3.1) -->
           <div class="border-t border-slate-700 pt-3">
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" id="hackerModeToggle" ${settings.hackerMode ? 'checked' : ''} class="w-4 h-4 accent-cyan-500" />
+              <input type="checkbox" id="hackerModeToggle" ${settings.hackerMode ? 'checked' : ''} class="w-4 h-4 accent-cyan-500" aria-label="Hacker Mode - Spy gets a hint" />
               <span class="text-sm text-slate-300">Hacker Mode (Spy gets a hint)</span>
             </label>
             <div id="hackerHintOptions" class="${settings.hackerMode ? '' : 'hidden'} mt-2 pl-6">
@@ -109,7 +110,7 @@ export function renderLobby(container) {
           <!-- Double Agent (Phase 3.2) -->
           <div class="border-t border-slate-700 pt-3">
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" id="doubleAgentToggle" ${settings.doubleAgent ? 'checked' : ''} class="w-4 h-4 accent-cyan-500" />
+              <input type="checkbox" id="doubleAgentToggle" ${settings.doubleAgent ? 'checked' : ''} class="w-4 h-4 accent-cyan-500" aria-label="Double Agent - Two Spies" />
               <span class="text-sm text-slate-300">Double Agent (Two Spies)</span>
             </label>
             ${settings.doubleAgent && activePlayers.length < 5
@@ -120,7 +121,7 @@ export function renderLobby(container) {
           <!-- Incident Response Mode (Phase 3.4) -->
           <div class="border-t border-slate-700 pt-3">
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" id="incidentModeToggle" ${settings.incidentMode ? 'checked' : ''} class="w-4 h-4 accent-cyan-500" />
+              <input type="checkbox" id="incidentModeToggle" ${settings.incidentMode ? 'checked' : ''} class="w-4 h-4 accent-cyan-500" aria-label="Incident Response Mode" />
               <span class="text-sm text-slate-300">Incident Response Mode</span>
             </label>
             <div class="text-xs text-slate-500 mt-1 pl-6">Progress bar replaces timer. Spy exfiltrates data over rounds.</div>
@@ -192,7 +193,7 @@ export function renderLobby(container) {
       }
 
       // Add form (if under cap of 20)
-      if (customLocs.length < 20) {
+      if (customLocs.length < LIMITS.MAX_CUSTOM_LOCATIONS) {
         const addForm = el('div', 'space-y-2');
         addForm.innerHTML = `
           <input type="text" id="customLocName" class="input !py-1.5 text-sm" placeholder="Location name" maxlength="40" />
@@ -229,7 +230,7 @@ export function renderLobby(container) {
           }
         }, 0);
       } else {
-        const cap = el('div', 'text-xs text-slate-500', 'Maximum 20 custom locations reached.');
+        const cap = el('div', 'text-xs text-slate-500', `Maximum ${LIMITS.MAX_CUSTOM_LOCATIONS} custom locations reached.`);
         customSection.appendChild(cap);
       }
 

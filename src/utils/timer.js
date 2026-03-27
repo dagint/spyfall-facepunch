@@ -10,7 +10,7 @@ export function createTimer(startedAtMs, durationSec, onTick, onExpire) {
   function tick() {
     if (stopped) return;
     const now = Date.now();
-    const remaining = Math.max(0, Math.ceil((endMs - now) / 1000));
+    const remaining = Math.max(0, Math.floor((endMs - now) / 1000));
     onTick(remaining);
     if (remaining <= 0) {
       onExpire();
@@ -23,7 +23,10 @@ export function createTimer(startedAtMs, durationSec, onTick, onExpire) {
 
   return function stop() {
     stopped = true;
-    if (rafId) cancelAnimationFrame(rafId);
+    if (rafId != null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
   };
 }
 

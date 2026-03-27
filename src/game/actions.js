@@ -14,6 +14,7 @@ import { LOCATIONS } from '../data/locations.js';
 import { navigate } from '../router.js';
 import { getActivePlayers } from './state.js';
 import { listenToRoom, stopListening } from './listeners.js';
+import { LIMITS } from '../constants.js';
 
 /** Log a game event to the timeline (Phase 2.2) */
 async function logEvent(type, data = {}) {
@@ -91,7 +92,7 @@ export async function joinRoom(roomCode, playerName) {
   }
 
   const playerCount = room.players ? Object.keys(room.players).length : 0;
-  if (playerCount >= 12) {
+  if (playerCount >= LIMITS.MAX_PLAYERS) {
     throw new Error('Room is full');
   }
 
@@ -114,7 +115,8 @@ export async function joinRoom(roomCode, playerName) {
 
 /** Update room settings (host only) */
 export async function updateSettings(settings) {
-  const { roomCode } = getState();
+  const { roomCode, room, uid } = getState();
+  if (room?.host !== uid) return;
   await update(ref(db, `rooms/${roomCode}/settings`), settings);
 }
 
@@ -126,15 +128,15 @@ export async function startGame() {
     .filter(([, p]) => p.connected !== false)
     .map(([uid]) => uid);
 
-  if (activeUids.length < 3) {
-    throw new Error('Need at least 3 players');
+  if (activeUids.length < LIMITS.MIN_PLAYERS) {
+    throw new Error(`Need at least ${LIMITS.MIN_PLAYERS} players`);
   }
 
   const settings = room.settings || {};
 
   // Double agent requires 5+ players
-  if (settings.doubleAgent && activeUids.length < 5) {
-    throw new Error('Double Agent mode requires at least 5 players');
+  if (settings.doubleAgent && activeUids.length < LIMITS.MIN_PLAYERS_DOUBLE_AGENT) {
+    throw new Error(`Double Agent mode requires at least ${LIMITS.MIN_PLAYERS_DOUBLE_AGENT} players`);
   }
 
   // Load custom locations if any
@@ -163,6 +165,7 @@ export async function castVote(targetUid) {
 }
 
 let evaluating = false;
+let advancing = false;
 
 /** Evaluate votes — called by the listener on the host client when votes change */
 export async function evaluateVotes() {
@@ -198,6 +201,32 @@ export async function evaluateVotes() {
         logEvent('majority', { target, caughtSpies });
         return;
       }
+    }
+
+    // Exfiltration mode: wrong accusation boosts spy progress instead of ending
+    if (!isSpy && game.exfiltration) {
+      const exf = game.exfiltration;
+      const voteBoost = exf.voteBoost || 0;
+      const newProgress = Math.min(100, exf.progress + voteBoost);
+      if (newProgress >= 100) {
+        await update(ref(db, `rooms/${roomCode}/game`), {
+          exfiltration: { ...exf, progress: 100 },
+          votes: null,
+          result: {
+            type: 'exfiltration',
+            winner: 'spy',
+            resolvedAtMs: Date.now(),
+          },
+        });
+        await set(ref(db, `rooms/${roomCode}/phase`), 'results');
+      } else {
+        await update(ref(db, `rooms/${roomCode}/game`), {
+          exfiltration: { ...exf, progress: newProgress },
+          votes: null,
+        });
+      }
+      logEvent('majority', { target, wrongAccusation: true });
+      return;
     }
 
     // Game ends
@@ -280,6 +309,7 @@ export async function handleTimerExpiry() {
 
 /** Advance round in incident response mode (host only) */
 export async function advanceRound() {
+  if (advancing) return;
   const { roomCode, room, uid } = getState();
   if (room.host !== uid) return;
   if (room.game?.result && !room.game.result.partial) return;
@@ -287,31 +317,37 @@ export async function advanceRound() {
   const exf = room.game.exfiltration;
   if (!exf) return;
 
-  const newProgress = Math.min(100, exf.progress + exf.incrementPerRound);
-  const newRound = exf.roundNumber + 1;
+  advancing = true;
+  try {
+    const newProgress = Math.min(100, exf.progress + exf.incrementPerRound);
+    const newRound = exf.roundNumber + 1;
 
-  if (newProgress >= 100) {
-    // Spy wins via exfiltration
-    await update(ref(db, `rooms/${roomCode}/game`), {
-      exfiltration: { ...exf, progress: 100, roundNumber: newRound },
-      result: {
-        type: 'exfiltration',
-        winner: 'spy',
-        resolvedAtMs: Date.now(),
-      },
-    });
-    await set(ref(db, `rooms/${roomCode}/phase`), 'results');
-  } else {
-    await update(ref(db, `rooms/${roomCode}/game/exfiltration`), {
-      progress: newProgress,
-      roundNumber: newRound,
-    });
+    if (newProgress >= 100) {
+      // Spy wins via exfiltration
+      await update(ref(db, `rooms/${roomCode}/game`), {
+        exfiltration: { ...exf, progress: 100, roundNumber: newRound },
+        result: {
+          type: 'exfiltration',
+          winner: 'spy',
+          resolvedAtMs: Date.now(),
+        },
+      });
+      await set(ref(db, `rooms/${roomCode}/phase`), 'results');
+    } else {
+      await update(ref(db, `rooms/${roomCode}/game/exfiltration`), {
+        progress: newProgress,
+        roundNumber: newRound,
+      });
+    }
+  } finally {
+    advancing = false;
   }
 }
 
 /** Add a custom location (host only) */
 export async function addCustomLocation(locationData) {
-  const { roomCode } = getState();
+  const { roomCode, room, uid } = getState();
+  if (room?.host !== uid) return;
   const customRef = ref(db, `rooms/${roomCode}/customLocations`);
   await push(customRef, {
     name: locationData.name,
@@ -322,7 +358,8 @@ export async function addCustomLocation(locationData) {
 
 /** Remove a custom location (host only) */
 export async function removeCustomLocation(locationKey) {
-  const { roomCode } = getState();
+  const { roomCode, room, uid } = getState();
+  if (room?.host !== uid) return;
   await set(ref(db, `rooms/${roomCode}/customLocations/${locationKey}`), null);
 }
 
@@ -335,9 +372,6 @@ export async function playAgain() {
     phase: 'lobby',
     game: null,
   });
-
-  // Clear all votes
-  await set(ref(db, `rooms/${roomCode}/game`), null);
 }
 
 /** Leave the room */

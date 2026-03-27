@@ -66,15 +66,16 @@ export function processGameResult(uid, gameData, result) {
     }
   }
 
-  // Caught spy on first vote
+  // Caught spy via vote
   if (!wasSpy && result.type === 'vote' && result.isSpy) {
-    // Check if this was effectively the first round of votes
-    const voteCount = gameData.votes ? Object.keys(gameData.votes).length : 0;
-    const playerCount = gameData.roles ? Object.keys(gameData.roles).length : 0;
-    if (voteCount <= playerCount) {
-      stats.firstVoteCatch++;
-    }
     stats.spyCatches++;
+    // "First vote catch" — resolved quickly (under 120s)
+    if (result.resolvedAtMs && gameData.startedAt) {
+      const elapsed = result.resolvedAtMs - gameData.startedAt;
+      if (elapsed < 120000) {
+        stats.firstVoteCatch++;
+      }
+    }
   }
 
   // Timeout win as spy

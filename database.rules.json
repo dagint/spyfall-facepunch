@@ -3,7 +3,7 @@
     "rooms": {
       "$roomCode": {
         ".read": "auth != null && (data.child('players').child(auth.uid).exists() || !data.child('host').exists())",
-        ".write": "auth != null",
+        ".write": "auth != null && (data.child('players').child(auth.uid).exists() || !data.exists())",
 
         "host": {
           ".write": "auth != null && (!data.exists() || data.val() === auth.uid)"
@@ -14,7 +14,8 @@
         },
 
         "phase": {
-          ".write": "auth != null && data.parent().child('host').val() === auth.uid"
+          ".write": "auth != null && data.parent().child('host').val() === auth.uid",
+          ".validate": "newData.val() === 'lobby' || newData.val() === 'playing' || newData.val() === 'results'"
         },
 
         "players": {
@@ -32,7 +33,8 @@
 
           "votes": {
             "$uid": {
-              ".write": "auth != null && $uid === auth.uid"
+              ".write": "auth != null && $uid === auth.uid",
+              ".validate": "newData.isString() && root.child('rooms').child($roomCode).child('players').child(newData.val()).exists()"
             }
           },
 
@@ -41,9 +43,9 @@
           },
 
           "events": {
-            ".write": "auth != null",
+            ".write": "auth != null && root.child('rooms').child($roomCode).child('players').child(auth.uid).exists()",
             "$eventId": {
-              ".write": "auth != null"
+              ".write": "auth != null && root.child('rooms').child($roomCode).child('players').child(auth.uid).exists()"
             }
           }
         }

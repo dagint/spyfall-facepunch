@@ -2,7 +2,7 @@ import { el, renderTimerDisplay, renderLocationGrid, renderPromptSuggestions, re
 import { getState, subscribe, getActivePlayers, getGameData, isHost } from '../../game/state.js';
 import { castVote, spyGuessLocation, handleTimerExpiry, advanceRound } from '../../game/actions.js';
 import { LOCATIONS } from '../../data/locations.js';
-import { createTimer, formatTime } from '../../utils/timer.js';
+import { createTimer } from '../../utils/timer.js';
 import { play } from '../../audio/sounds.js';
 import { getTheme } from '../theme.js';
 
@@ -12,6 +12,8 @@ export function renderGame(container) {
   let crossedOut = new Set();
   let promptsDismissed = false;
   let lastTickSound = 0;
+  let activeOverlay = null;
+  let lastStateKey = null;
 
   // Try to load crossed-out state from sessionStorage
   try {
@@ -25,6 +27,16 @@ export function renderGame(container) {
     const game = getGameData();
 
     if (!room || !game) return;
+
+    // Skip re-render if game state hasn't meaningfully changed
+    const stateKey = JSON.stringify({
+      votes: game.votes,
+      result: game.result,
+      exfiltration: game.exfiltration,
+      players: Object.keys(room.players || {}).map(uid => room.players[uid].connected).join(','),
+    });
+    if (lastStateKey !== null && stateKey === lastStateKey) return;
+    lastStateKey = stateKey;
 
     const isSpy = game.spyId === uid || (game.spyIds && game.spyIds[uid]);
     const isCaughtSpy = game.result?.caughtSpies?.includes(uid);
@@ -94,6 +106,8 @@ export function renderGame(container) {
 
     // Role card
     const roleCard = el('div', `role-card mb-6 ${isSpy ? 'role-card-spy' : 'role-card-normal'}`);
+    roleCard.setAttribute('role', 'region');
+    roleCard.setAttribute('aria-label', isSpy ? 'Your role: Spy' : 'Your dossier');
 
     if (isSpy) {
       if (isTerminal) {
@@ -147,6 +161,8 @@ export function renderGame(container) {
 
     // Location reference list (for crossing off)
     const locSection = el('div', 'card mb-4');
+    locSection.setAttribute('role', 'region');
+    locSection.setAttribute('aria-label', 'Location reference');
     const locTitle = el('div', 'text-xs text-slate-400 uppercase tracking-wider mb-3', 'Location Reference (tap to cross off)');
     locSection.appendChild(locTitle);
 
@@ -188,6 +204,7 @@ export function renderGame(container) {
       // Vote/accuse section
       if (!isCaughtSpy) {
         const voteCard = el('div', 'card');
+        voteCard.setAttribute('aria-label', 'Vote to accuse a player');
         voteCard.innerHTML = `<div class="text-sm font-semibold text-slate-300 mb-3">Accuse a Player</div>`;
 
         const voteGrid = el('div', 'space-y-2');
@@ -200,6 +217,7 @@ export function renderGame(container) {
             ? `${codenames[player.uid]} // ${player.name}`
             : player.name;
           const voteBtn = el('button', 'btn-secondary text-xs flex-1 !py-2', displayName);
+          voteBtn.setAttribute('aria-label', `Vote for ${displayName}`);
 
           // Highlight if already voted for this player
           const myVote = game.votes?.[uid];
@@ -219,7 +237,10 @@ export function renderGame(container) {
             : 0;
           if (voteCount > 0) {
             const badge = el('span', 'text-xs text-amber-400 font-mono w-8 text-center', `${voteCount}`);
+            const srVoteCount = el('span', 'sr-only', `${voteCount} vote${voteCount !== 1 ? 's' : ''}`);
+            badge.setAttribute('aria-hidden', 'true');
             row.appendChild(badge);
+            row.appendChild(srVoteCount);
           }
 
           voteGrid.appendChild(row);
@@ -249,9 +270,18 @@ export function renderGame(container) {
     }
   }
 
+  function removeOverlay(overlay) {
+    overlay.remove();
+    if (activeOverlay === overlay) activeOverlay = null;
+  }
+
   function showGuessModal(container, room) {
     const overlay = el('div', 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4');
+    activeOverlay = overlay;
     const modal = el('div', 'card max-w-sm w-full max-h-[80vh] overflow-y-auto');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Guess the location');
 
     modal.innerHTML = `
       <div class="text-lg font-bold text-rose-400 mb-4">Guess the Location</div>
@@ -274,7 +304,7 @@ export function renderGame(container) {
             const locIdx = LOCATIONS.findIndex((l) => l.name === loc.name);
             await spyGuessLocation(locIdx);
           }
-          overlay.remove();
+          removeOverlay(overlay);
         } catch (err) {
           showError(modal, err.message);
           btn.disabled = false;
@@ -286,14 +316,26 @@ export function renderGame(container) {
     modal.appendChild(grid);
 
     const cancelBtn = el('button', 'btn-secondary w-full mt-4', 'Cancel');
-    cancelBtn.addEventListener('click', () => overlay.remove());
+    cancelBtn.addEventListener('click', () => removeOverlay(overlay));
     modal.appendChild(cancelBtn);
 
     overlay.appendChild(modal);
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) overlay.remove();
+      if (e.target === overlay) removeOverlay(overlay);
     });
     document.body.appendChild(overlay);
+
+    // Focus trap and keyboard handling
+    const focusableEls = modal.querySelectorAll('button');
+    if (focusableEls.length > 0) focusableEls[0].focus();
+
+    const keyHandler = (e) => {
+      if (e.key === 'Escape') {
+        removeOverlay(overlay);
+        document.removeEventListener('keydown', keyHandler);
+      }
+    };
+    document.addEventListener('keydown', keyHandler);
   }
 
   render();
@@ -302,6 +344,7 @@ export function renderGame(container) {
   return () => {
     if (unsub) unsub();
     if (stopTimer) stopTimer();
+    if (activeOverlay) { activeOverlay.remove(); activeOverlay = null; }
     sessionStorage.removeItem('spyfall_crossed');
   };
 }

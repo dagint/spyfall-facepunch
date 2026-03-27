@@ -10,9 +10,9 @@ export function renderHome(container) {
   const isTerminal = getTheme() === 'terminal';
 
   container.innerHTML = `
-    <div class="flex-1 flex flex-col items-center justify-center text-center">
+    <div class="flex-1 flex flex-col items-center justify-center text-center" role="main">
       <div class="absolute top-4 right-4">
-        <button id="themeToggle" class="text-xs px-3 py-1.5 rounded border cursor-pointer ${isTerminal ? 'border-green-500 text-green-400 hover:bg-green-500/10' : 'border-slate-600 text-slate-400 hover:text-cyan-400 hover:border-cyan-400'}" title="Toggle terminal theme">
+        <button id="themeToggle" class="text-xs px-3 py-1.5 rounded border cursor-pointer ${isTerminal ? 'border-green-500 text-green-400 hover:bg-green-500/10' : 'border-slate-600 text-slate-400 hover:text-cyan-400 hover:border-cyan-400'}" title="Toggle terminal theme" aria-label="Toggle terminal theme">
           ${isTerminal ? '> EXIT TERMINAL' : '> TERMINAL'}
         </button>
       </div>
