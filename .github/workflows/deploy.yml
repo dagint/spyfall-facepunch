@@ -58,6 +58,6 @@ jobs:
       - name: Deploy Firebase database rules
         uses: w9jds/firebase-action@master
         with:
-          args: deploy --only database
+          args: deploy --only database --project spyfall-facepunch
         env:
           GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
