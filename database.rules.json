@@ -3,6 +3,7 @@
     "rooms": {
       "$roomCode": {
         ".read": "auth != null && (data.child('players').child(auth.uid).exists() || !data.child('host').exists())",
+        ".write": "auth != null && !data.exists()",
 
         "host": {
           ".write": "auth != null && (!data.exists() || data.val() === auth.uid)"
@@ -14,23 +15,23 @@
         },
 
         "settings": {
-          ".write": "auth != null && newData.parent().child('host').val() === auth.uid"
+          ".write": "auth != null && root.child('rooms').child($roomCode).child('host').val() === auth.uid"
         },
 
         "phase": {
-          ".write": "auth != null && newData.parent().child('host').val() === auth.uid",
+          ".write": "auth != null && root.child('rooms').child($roomCode).child('host').val() === auth.uid",
           ".validate": "newData.val() === 'lobby' || newData.val() === 'playing' || newData.val() === 'results'"
         },
 
         "players": {
           "$uid": {
-            ".write": "auth != null && ($uid === auth.uid || newData.parent().parent().child('host').val() === auth.uid)",
+            ".write": "auth != null && ($uid === auth.uid || root.child('rooms').child($roomCode).child('host').val() === auth.uid)",
             ".validate": "newData.hasChild('name') && newData.child('name').val().length <= 20"
           }
         },
 
         "customLocations": {
-          ".write": "auth != null && newData.parent().child('host').val() === auth.uid"
+          ".write": "auth != null && root.child('rooms').child($roomCode).child('host').val() === auth.uid"
         },
 
         "createdAt": {
@@ -38,7 +39,7 @@
         },
 
         "game": {
-          ".write": "auth != null && newData.parent().child('host').val() === auth.uid",
+          ".write": "auth != null && root.child('rooms').child($roomCode).child('host').val() === auth.uid",
 
           "votes": {
             "$uid": {
