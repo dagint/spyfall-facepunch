@@ -14,23 +14,23 @@
         },
 
         "settings": {
-          ".write": "auth != null && data.parent().child('host').val() === auth.uid"
+          ".write": "auth != null && newData.parent().child('host').val() === auth.uid"
         },
 
         "phase": {
-          ".write": "auth != null && data.parent().child('host').val() === auth.uid",
+          ".write": "auth != null && newData.parent().child('host').val() === auth.uid",
           ".validate": "newData.val() === 'lobby' || newData.val() === 'playing' || newData.val() === 'results'"
         },
 
         "players": {
           "$uid": {
-            ".write": "auth != null && ($uid === auth.uid || data.parent().parent().child('host').val() === auth.uid)",
+            ".write": "auth != null && ($uid === auth.uid || newData.parent().parent().child('host').val() === auth.uid)",
             ".validate": "newData.hasChild('name') && newData.child('name').val().length <= 20"
           }
         },
 
         "customLocations": {
-          ".write": "auth != null && data.parent().child('host').val() === auth.uid"
+          ".write": "auth != null && newData.parent().child('host').val() === auth.uid"
         },
 
         "createdAt": {
@@ -38,7 +38,7 @@
         },
 
         "game": {
-          ".write": "auth != null && data.parent().child('host').val() === auth.uid",
+          ".write": "auth != null && newData.parent().child('host').val() === auth.uid",
 
           "votes": {
             "$uid": {
