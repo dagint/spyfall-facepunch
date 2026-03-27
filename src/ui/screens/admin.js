@@ -1,6 +1,6 @@
 import { el, renderHeader, sanitize, showError } from '../components.js';
 import {
-  db, ref, onValue, query, orderByChild, limitToLast, get,
+  db, ref, onValue, query, orderByChild, limitToLast, get, set, update,
   isCurrentUserAdmin, isAdminEmail, signInWithGoogle, signOutAdmin, getCurrentEmail,
 } from '../../firebase.js';
 import { navigate } from '../../router.js';
@@ -195,9 +195,8 @@ export function renderAdmin(container) {
     }
 
     const table = el('div', 'space-y-2');
-    // Header row
-    const headerRow = el('div', 'grid grid-cols-5 gap-2 px-4 py-2 text-xs text-slate-500 uppercase tracking-wider font-mono');
-    headerRow.innerHTML = '<span>Code</span><span>Phase</span><span>Players</span><span>Host</span><span>Created</span>';
+    const headerRow = el('div', 'grid grid-cols-6 gap-2 px-4 py-2 text-xs text-slate-500 uppercase tracking-wider font-mono');
+    headerRow.innerHTML = '<span>Code</span><span>Phase</span><span>Players</span><span>Host</span><span>Created</span><span></span>';
     table.appendChild(headerRow);
 
     rooms.forEach(([code, room]) => {
@@ -206,17 +205,37 @@ export function renderAdmin(container) {
       const hostName = room.players?.[hostUid]?.name || 'Unknown';
       const phase = room.phase || 'unknown';
       const createdAt = room.createdAt ? relativeTime(room.createdAt) : '—';
-
+      const isAdminRoom = !!room.hostedByAdmin;
       const phaseColors = { lobby: 'text-amber-400', playing: 'text-emerald-400', results: 'text-cyan-400' };
 
-      const row = el('div', 'grid grid-cols-5 gap-2 px-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700/50 text-sm');
+      const row = el('div', 'grid grid-cols-6 gap-2 px-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700/50 text-sm items-center');
       row.innerHTML = `
         <span class="font-mono font-bold text-cyan-400">${sanitize(code)}</span>
         <span class="font-mono ${phaseColors[phase] || 'text-slate-400'}">${sanitize(phase)}</span>
         <span class="text-slate-300">${playerCount}</span>
-        <span class="text-slate-300">${sanitize(hostName)}</span>
+        <span class="text-slate-300 truncate">${sanitize(hostName)}${isAdminRoom ? ' <span class="text-emerald-500 text-xs">admin</span>' : ''}</span>
         <span class="text-slate-500 text-xs">${createdAt}</span>
+        <span></span>
       `;
+
+      const deleteBtn = el('button', 'text-xs text-rose-500 hover:text-rose-400 cursor-pointer font-mono', 'Delete');
+      deleteBtn.addEventListener('click', async () => {
+        if (!confirm(`Delete room ${code}?`)) return;
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = '...';
+        try {
+          await update(ref(db), {
+            [`rooms/${code}`]: null,
+            [`roomSecrets/${code}`]: null,
+            [`playerRoles/${code}`]: null,
+          });
+        } catch (err) {
+          showError(content, `Failed to delete ${code}: ${err.message}`);
+          deleteBtn.disabled = false;
+          deleteBtn.textContent = 'Delete';
+        }
+      });
+      row.lastElementChild.appendChild(deleteBtn);
       table.appendChild(row);
     });
     content.appendChild(table);

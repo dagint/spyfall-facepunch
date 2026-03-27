@@ -43,15 +43,16 @@
     "roomSecrets": {
       "$roomCode": {
         ".read": "auth != null && root.child('rooms').child($roomCode).child('host').val() === auth.uid",
-        ".write": "auth != null && root.child('rooms').child($roomCode).child('host').val() === auth.uid"
+        ".write": "auth != null && (root.child('rooms').child($roomCode).child('host').val() === auth.uid || (auth.token.email_verified === true && !newData.exists()))"
       }
     },
 
     "playerRoles": {
       "$roomCode": {
+        ".write": "auth != null && (root.child('rooms').child($roomCode).child('host').val() === auth.uid || (auth.token.email_verified === true && !newData.exists()))",
         "$uid": {
           ".read": "auth != null && $uid === auth.uid",
-          ".write": "auth != null && root.child('rooms').child($roomCode).child('host').val() === auth.uid"
+          ".write": "auth != null && (root.child('rooms').child($roomCode).child('host').val() === auth.uid || (auth.token.email_verified === true && !newData.exists()))"
         }
       }
     },
