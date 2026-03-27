@@ -54,3 +54,10 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages domain add ${{ secrets.CLOUDFLARE_PAGES_DOMAIN }} --project-name=spyfall-facepunch
         continue-on-error: true
+
+      - name: Deploy Firebase database rules
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only database
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
