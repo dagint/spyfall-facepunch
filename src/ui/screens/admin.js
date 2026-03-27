@@ -5,6 +5,7 @@ import {
 } from '../../firebase.js';
 import { navigate } from '../../router.js';
 import { iconBarChart, iconPercent, iconClock, iconUsers, iconFolder, iconTrophy, iconHistory as iconHistoryIcon, iconLock } from '../icons.js';
+import { cleanupOldRooms } from '../../game/actions.js';
 
 /** Render the admin dashboard (rooms, history, stats, leaderboard). */
 export function renderAdmin(container) {
@@ -172,6 +173,19 @@ export function renderAdmin(container) {
 
   // ===== Active Rooms =====
   function renderRooms() {
+    // Cleanup button
+    const cleanupRow = el('div', 'flex justify-end mb-3');
+    const cleanupBtn = el('button', 'btn-secondary !px-3 !py-1.5 text-xs', 'Clean up old rooms');
+    cleanupBtn.addEventListener('click', async () => {
+      cleanupBtn.disabled = true;
+      cleanupBtn.textContent = 'Cleaning...';
+      await cleanupOldRooms();
+      cleanupBtn.textContent = 'Done';
+      setTimeout(() => { cleanupBtn.disabled = false; cleanupBtn.textContent = 'Clean up old rooms'; }, 2000);
+    });
+    cleanupRow.appendChild(cleanupBtn);
+    content.appendChild(cleanupRow);
+
     const rooms = Object.entries(roomsData);
     if (rooms.length === 0) {
       const empty = el('div', 'text-center py-12');

@@ -15,7 +15,7 @@ import { buildGameState, checkMajority } from './engine.js';
 import { LOCATIONS } from '../data/locations.js';
 import { navigate } from '../router.js';
 import { listenToRoom, stopListening } from './listeners.js';
-import { LIMITS, STORAGE_KEYS, PHASE, EVENT_TYPE, RESULT_TYPE } from '../constants.js';
+import { LIMITS, STORAGE_KEYS, PHASE, EVENT_TYPE, RESULT_TYPE, ROOM_MAX_AGE_MS } from '../constants.js';
 import { isSpy as checkIsSpy, getSpyUids } from '../utils/gameHelpers.js';
 
 /**
@@ -114,8 +114,61 @@ async function logEvent(type, data = {}) {
   }
 }
 
+/**
+ * Delete a single non-admin room by code (fire-and-forget safe).
+ * Works if current user is the host OR is a verified-email admin.
+ */
+async function deleteRoom(roomCode) {
+  try {
+    await set(ref(db, `rooms/${roomCode}`), null);
+  } catch {
+    // Ignore — room may already be gone or user lacks permission
+  }
+}
+
+/**
+ * Clean up stale non-admin rooms.
+ * - Admins: scan all rooms and delete non-admin rooms older than ROOM_MAX_AGE_MS
+ * - Non-admins: check their own previously created rooms stored in localStorage
+ */
+export async function cleanupOldRooms() {
+  const cutoff = Date.now() - ROOM_MAX_AGE_MS;
+
+  if (isCurrentUserAdmin()) {
+    try {
+      const snap = await get(ref(db, 'rooms'));
+      if (!snap.exists()) return;
+      const rooms = snap.val();
+      const toDelete = Object.entries(rooms)
+        .filter(([, r]) => !r.hostedByAdmin && (r.createdAt || 0) < cutoff)
+        .map(([code]) => code);
+      await Promise.all(toDelete.map(deleteRoom));
+    } catch {
+      // Non-blocking
+    }
+  } else {
+    // Non-admin: clean up own previously created rooms tracked in localStorage
+    const raw = localStorage.getItem(STORAGE_KEYS.MY_ROOMS);
+    if (!raw) return;
+    try {
+      const myRooms = JSON.parse(raw);
+      const remaining = [];
+      await Promise.all(myRooms.map(async ({ code, createdAt }) => {
+        if (createdAt >= cutoff) { remaining.push({ code, createdAt }); return; }
+        const snap = await get(ref(db, `rooms/${code}`));
+        if (!snap.exists() || snap.val()?.hostedByAdmin) return;
+        await deleteRoom(code);
+      }));
+      localStorage.setItem(STORAGE_KEYS.MY_ROOMS, JSON.stringify(remaining));
+    } catch {
+      // Non-blocking
+    }
+  }
+}
+
 /** Create a new room and join as host (anyone) */
 export async function createRoom(playerName) {
+  cleanupOldRooms(); // fire-and-forget
   const { uid } = getState();
   let roomCode = generateRoomCode();
 
@@ -153,6 +206,15 @@ export async function createRoom(playerName) {
   };
 
   await set(ref(db, `rooms/${roomCode}`), roomData);
+
+  // Track non-admin rooms in localStorage for future self-cleanup
+  if (!isCurrentUserAdmin()) {
+    try {
+      const existing = JSON.parse(localStorage.getItem(STORAGE_KEYS.MY_ROOMS) || '[]');
+      existing.push({ code: roomCode, createdAt: roomData.createdAt });
+      localStorage.setItem(STORAGE_KEYS.MY_ROOMS, JSON.stringify(existing));
+    } catch { /* non-critical */ }
+  }
 
   const connRef = ref(db, `rooms/${roomCode}/players/${uid}/connected`);
   onDisconnect(connRef).set(false);

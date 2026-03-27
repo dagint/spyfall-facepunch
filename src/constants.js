@@ -55,6 +55,9 @@ export const RESULT_TYPE = {
 // Settings debounce delay (ms)
 export const SETTINGS_DEBOUNCE_MS = 400;
 
+// Max age for non-admin room cleanup (6 hours)
+export const ROOM_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
 // localStorage / sessionStorage keys
 export const STORAGE_KEYS = {
   PLAYER_NAME: 'spyfall_name',
@@ -63,4 +66,5 @@ export const STORAGE_KEYS = {
   MUTED: 'spyfall_muted',
   THEME: 'spyfall_theme',
   ACHIEVEMENTS_PREFIX: 'spyfall_achievements_',
+  MY_ROOMS: 'spyfall_my_rooms',
 };

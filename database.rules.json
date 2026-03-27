@@ -3,7 +3,7 @@
     "rooms": {
       "$roomCode": {
         ".read": "auth != null && (data.child('players').child(auth.uid).exists() || !data.child('host').exists())",
-        ".write": "auth != null && (!data.exists() || data.child('host').val() === auth.uid)",
+        ".write": "auth != null && (!data.exists() || data.child('host').val() === auth.uid || (auth.token.email_verified === true && !newData.exists() && data.child('hostedByAdmin').val() !== true))",
 
         "phase": {
           ".validate": "newData.val() === 'lobby' || newData.val() === 'playing' || newData.val() === 'results'"
