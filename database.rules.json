@@ -8,6 +8,11 @@
           ".write": "auth != null && (!data.exists() || data.val() === auth.uid)"
         },
 
+        "hostedByAdmin": {
+          ".write": "auth != null && !data.exists()",
+          ".validate": "newData.val() === true"
+        },
+
         "settings": {
           ".write": "auth != null && data.parent().child('host').val() === auth.uid"
         },
@@ -77,7 +82,7 @@
     "gameHistory": {
       ".read": "auth != null && auth.token.email != null && auth.token.email_verified === true",
       "$gameId": {
-        ".write": "auth != null && !data.exists()",
+        ".write": "auth != null && !data.exists() && root.child('rooms').child(newData.child('roomCode').val()).child('hostedByAdmin').val() === true",
         ".validate": "newData.hasChildren(['roomCode', 'completedAt', 'result'])"
       }
     }

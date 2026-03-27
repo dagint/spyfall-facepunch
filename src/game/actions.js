@@ -54,6 +54,7 @@ async function persistGameHistory(roomCode) {
   try {
     const { room } = getState();
     if (!room) return;
+    if (!room.hostedByAdmin) return; // Only persist admin-hosted games
     const game = room.game;
     if (!game || !game.result) return;
 
@@ -111,11 +112,8 @@ async function logEvent(type, data = {}) {
   }
 }
 
-/** Create a new room and join as host (admin only) */
+/** Create a new room and join as host (anyone) */
 export async function createRoom(playerName) {
-  if (!isCurrentUserAdmin()) {
-    throw new Error('Only admins can create rooms. Sign in with Google first.');
-  }
   const { uid } = getState();
   let roomCode = generateRoomCode();
 
@@ -130,6 +128,7 @@ export async function createRoom(playerName) {
 
   const roomData = {
     host: uid,
+    hostedByAdmin: isCurrentUserAdmin() ? true : null,
     settings: {
       durationSec: 480,
       pack: 'all',

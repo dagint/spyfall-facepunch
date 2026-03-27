@@ -44,7 +44,7 @@ export function renderHome(container) {
           />
         </div>
 
-        ${isAdmin ? '<button id="createBtn" class="btn-primary w-full">Create Room</button>' : ''}
+        <button id="createBtn" class="btn-primary w-full">Create Room</button>
 
         <div class="flex gap-2">
           <label for="codeInput" class="sr-only">Room code</label>
@@ -122,27 +122,25 @@ export function renderHome(container) {
     });
   }
 
-  // Create room (admin only)
-  if (createBtn) {
-    createBtn.addEventListener('click', async () => {
-      const name = nameInput.value.trim();
-      if (!name) {
-        showError(container, 'Please enter your name');
-        nameInput.focus();
-        return;
-      }
-      localStorage.setItem(STORAGE_KEYS.PLAYER_NAME, name);
-      createBtn.disabled = true;
-      createBtn.textContent = 'Creating...';
-      try {
-        await createRoom(name);
-      } catch (err) {
-        showError(container, err.message);
-        createBtn.disabled = false;
-        createBtn.textContent = 'Create Room';
-      }
-    });
-  }
+  // Create room (anyone)
+  createBtn.addEventListener('click', async () => {
+    const name = nameInput.value.trim();
+    if (!name) {
+      showError(container, 'Please enter your name');
+      nameInput.focus();
+      return;
+    }
+    localStorage.setItem(STORAGE_KEYS.PLAYER_NAME, name);
+    createBtn.disabled = true;
+    createBtn.textContent = 'Creating...';
+    try {
+      await createRoom(name);
+    } catch (err) {
+      showError(container, err.message);
+      createBtn.disabled = false;
+      createBtn.textContent = 'Create Room';
+    }
+  });
 
   // Join room (anyone)
   joinBtn.addEventListener('click', async () => {
