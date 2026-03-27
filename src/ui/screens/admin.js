@@ -12,6 +12,7 @@ export function renderAdmin(container) {
   let historyData = [];
   let roomsData = {};
   let activeTab = 'rooms';
+  let filterEmail = 'all';
 
   function cleanup() {
     unsubs.forEach((fn) => fn());
@@ -134,9 +135,35 @@ export function renderAdmin(container) {
   content.setAttribute('aria-labelledby', `tab-${activeTab}`);
   container.appendChild(content);
 
+  function filteredHistory() {
+    if (filterEmail === 'all') return historyData;
+    return historyData.filter((g) => g.hostedByEmail === filterEmail);
+  }
+
+  function renderFilter() {
+    const adminEmails = [...new Set(historyData.map((g) => g.hostedByEmail).filter(Boolean))].sort();
+    if (adminEmails.length <= 1) return null;
+
+    const wrap = el('div', 'flex items-center gap-2 mb-4');
+    wrap.innerHTML = `<span class="text-xs text-slate-500 font-mono">Host:</span>`;
+    const select = el('select', 'input !py-1.5 !px-2 text-xs w-auto');
+    select.innerHTML = `<option value="all">All Admins</option>` +
+      adminEmails.map((e) => `<option value="${sanitize(e)}" ${filterEmail === e ? 'selected' : ''}>${sanitize(e)}</option>`).join('');
+    select.addEventListener('change', () => {
+      filterEmail = select.value;
+      renderTabContent();
+    });
+    wrap.appendChild(select);
+    return wrap;
+  }
+
   function renderTabContent() {
     content.innerHTML = '';
     content.setAttribute('aria-labelledby', `tab-${activeTab}`);
+    if (activeTab !== 'rooms') {
+      const filter = renderFilter();
+      if (filter) content.appendChild(filter);
+    }
     if (activeTab === 'rooms') renderRooms();
     else if (activeTab === 'history') renderHistory();
     else if (activeTab === 'stats') renderStats();
@@ -183,6 +210,7 @@ export function renderAdmin(container) {
 
   // ===== Game History =====
   function renderHistory() {
+    const historyData = filteredHistory();
     if (historyData.length === 0) {
       const empty = el('div', 'text-center py-12');
       empty.innerHTML = `<div class="text-slate-600 mb-3 flex justify-center">${iconHistoryIcon(48)}</div><div class="text-slate-500 text-sm">No games recorded yet</div>`;
@@ -300,6 +328,7 @@ export function renderAdmin(container) {
 
   // ===== Stats =====
   function renderStats() {
+    const historyData = filteredHistory();
     if (historyData.length === 0) {
       const empty = el('div', 'text-center py-12');
       empty.innerHTML = `<div class="text-slate-600 mb-3 flex justify-center">${iconBarChart(48)}</div><div class="text-slate-500 text-sm">No data yet</div>`;
@@ -400,6 +429,7 @@ export function renderAdmin(container) {
 
   // ===== Leaderboard =====
   function renderLeaderboard() {
+    const historyData = filteredHistory();
     if (historyData.length === 0) {
       const empty = el('div', 'text-center py-12');
       empty.innerHTML = `<div class="text-slate-600 mb-3 flex justify-center">${iconTrophy(48)}</div><div class="text-slate-500 text-sm">No data yet</div>`;

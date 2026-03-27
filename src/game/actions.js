@@ -7,6 +7,7 @@ import {
   onDisconnect,
   push,
   isCurrentUserAdmin,
+  getCurrentEmail,
 } from '../firebase.js';
 import { getState, setState, getActivePlayers } from './state.js';
 import { generateRoomCode } from '../utils/roomCode.js';
@@ -65,6 +66,7 @@ async function persistGameHistory(roomCode) {
 
     const historyEntry = {
       roomCode,
+      hostedByEmail: getCurrentEmail() || 'unknown',
       completedAt: Date.now(),
       startedAt: game.startedAt || null,
       durationMs: game.startedAt ? Date.now() - game.startedAt : null,
