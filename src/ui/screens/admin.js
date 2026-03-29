@@ -14,6 +14,9 @@ export function renderAdmin(container) {
   let roomsData = {};
   let activeTab = 'rooms';
   let filterEmail = 'all';
+  let historyPage = 0;
+  let leaderboardPage = 0;
+  const PAGE_SIZE = 20;
 
   function cleanup() {
     unsubs.forEach((fn) => fn());
@@ -141,6 +144,24 @@ export function renderAdmin(container) {
     return historyData.filter((g) => g.hostedByEmail === filterEmail);
   }
 
+  function renderPager(page, totalItems, onPageChange) {
+    const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+    if (totalPages <= 1) return null;
+    const wrap = el('div', 'flex items-center justify-between mt-4 pt-3 border-t border-slate-700/50');
+    const info = el('span', 'text-xs text-slate-500 font-mono');
+    info.textContent = `Page ${page + 1} of ${totalPages} (${totalItems} total)`;
+    const btns = el('div', 'flex gap-2');
+    const prev = el('button', 'btn-secondary !px-3 !py-1 text-xs', 'Prev');
+    prev.disabled = page === 0;
+    prev.addEventListener('click', () => onPageChange(page - 1));
+    const next = el('button', 'btn-secondary !px-3 !py-1 text-xs', 'Next');
+    next.disabled = page >= totalPages - 1;
+    next.addEventListener('click', () => onPageChange(page + 1));
+    btns.append(prev, next);
+    wrap.append(info, btns);
+    return wrap;
+  }
+
   function renderFilter() {
     const adminEmails = [...new Set(historyData.map((g) => g.hostedByEmail).filter(Boolean))].sort();
     if (adminEmails.length <= 1) return null;
@@ -152,6 +173,8 @@ export function renderAdmin(container) {
       adminEmails.map((e) => `<option value="${sanitize(e)}" ${filterEmail === e ? 'selected' : ''}>${sanitize(e)}</option>`).join('');
     select.addEventListener('change', () => {
       filterEmail = select.value;
+      historyPage = 0;
+      leaderboardPage = 0;
       renderTabContent();
     });
     wrap.appendChild(select);
@@ -252,8 +275,9 @@ export function renderAdmin(container) {
     }
 
     const sorted = [...historyData].sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
+    const pageItems = sorted.slice(historyPage * PAGE_SIZE, (historyPage + 1) * PAGE_SIZE);
 
-    sorted.forEach((game) => {
+    pageItems.forEach((game) => {
       const card = el('div', 'card mb-3');
       const winner = game.result?.winner || 'unknown';
       const winnerColor = winner === 'spy' ? 'text-rose-400' : 'text-emerald-400';
@@ -357,6 +381,9 @@ export function renderAdmin(container) {
 
       content.appendChild(card);
     });
+
+    const pager = renderPager(historyPage, sorted.length, (p) => { historyPage = p; renderTabContent(); });
+    if (pager) content.appendChild(pager);
   }
 
   // ===== Stats =====
@@ -492,6 +519,7 @@ export function renderAdmin(container) {
     });
 
     const sorted = Object.values(playerStats).sort((a, b) => b.games - a.games);
+    const pageItems = sorted.slice(leaderboardPage * PAGE_SIZE, (leaderboardPage + 1) * PAGE_SIZE);
 
     const table = el('div', 'space-y-1');
 
@@ -500,7 +528,7 @@ export function renderAdmin(container) {
     headerRow.innerHTML = '<span>Player</span><span class="text-center">Games</span><span class="text-center">As Spy</span><span class="text-center">Spy Win%</span><span class="text-center">Player Win%</span><span class="text-center">Overall Win%</span>';
     table.appendChild(headerRow);
 
-    sorted.forEach((s) => {
+    pageItems.forEach((s) => {
       const spyWinPct = s.spyGames > 0 ? Math.round((s.spyWins / s.spyGames) * 100) : 0;
       const nonSpyGames = s.games - s.spyGames;
       const playerWinPct = nonSpyGames > 0 ? Math.round((s.playerWins / nonSpyGames) * 100) : 0;
@@ -519,6 +547,9 @@ export function renderAdmin(container) {
       table.appendChild(row);
     });
     content.appendChild(table);
+
+    const pager = renderPager(leaderboardPage, sorted.length, (p) => { leaderboardPage = p; renderTabContent(); });
+    if (pager) content.appendChild(pager);
   }
 
   // ===== Firebase listeners =====
