@@ -16,7 +16,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -37,14 +37,6 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_ADMIN_EMAILS: ${{ secrets.VITE_ADMIN_EMAILS }}
 
-      - name: Create Pages project if not exists
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages project create spyfall-facepunch --production-branch=main
-        continue-on-error: true
-
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
@@ -52,16 +44,8 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist --project-name=spyfall-facepunch --commit-dirty=true
 
-      - name: Register custom domain
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages domain add ${{ secrets.CLOUDFLARE_PAGES_DOMAIN }} --project-name=spyfall-facepunch
-        continue-on-error: true
-
       - name: Deploy Firebase database rules
-        uses: w9jds/firebase-action@master
+        uses: w9jds/firebase-action@v2.4.2
         with:
           args: deploy --only database --project spyfall-facepunch
         env:
