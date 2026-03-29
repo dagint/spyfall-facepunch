@@ -1,6 +1,6 @@
 import { el, sanitize, showError } from '../components.js';
 import {
-  db, ref, onValue, query, orderByChild, limitToLast, endBefore, get, update,
+  db, ref, onValue, query, orderByChild, limitToLast, endBefore, get, set,
   isAdminEmail, signInWithGoogle, signOutAdmin, getCurrentEmail,
 } from '../../firebase.js';
 import { navigate } from '../../router.js';
@@ -247,11 +247,11 @@ export function renderAdmin(container) {
         deleteBtn.disabled = true;
         deleteBtn.textContent = '...';
         try {
-          await update(ref(db), {
-            [`rooms/${code}`]: null,
-            [`roomSecrets/${code}`]: null,
-            [`playerRoles/${code}`]: null,
-          });
+          await Promise.allSettled([
+            set(ref(db, `rooms/${code}`), null),
+            set(ref(db, `roomSecrets/${code}`), null),
+            set(ref(db, `playerRoles/${code}`), null),
+          ]);
         } catch (err) {
           showError(content, `Failed to delete ${code}: ${err.message}`);
           deleteBtn.disabled = false;

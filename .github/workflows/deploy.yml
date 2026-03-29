@@ -45,7 +45,7 @@ jobs:
           command: pages deploy dist --project-name=spyfall-facepunch --commit-dirty=true
 
       - name: Deploy Firebase database rules
-        uses: w9jds/firebase-action@v2.4.2
+        uses: w9jds/firebase-action@v15.12.0
         with:
           args: deploy --only database --project spyfall-facepunch
         env:
