@@ -1,5 +1,5 @@
 import { el, renderTimerDisplay, renderLocationGrid, renderPromptSuggestions, renderMuteToggle, showError, sanitize } from '../components.js';
-import { getState, subscribe, getActivePlayers, getGameData, isHost } from '../../game/state.js';
+import { getState, subscribe, getActivePlayers, getGameData, isHost, onError } from '../../game/state.js';
 import { castVote, spyGuessLocation, handleTimerExpiry, advanceRound } from '../../game/actions.js';
 import { LOCATIONS } from '../../data/locations.js';
 import { createTimer } from '../../utils/timer.js';
@@ -19,6 +19,7 @@ export function renderGame(container) {
   let activeOverlay = null;
   let activeKeyHandler = null;
   let lastStateKey = null;
+  let watchdogTimeout = null;
 
   // Try to load crossed-out state from sessionStorage
   try {
@@ -111,7 +112,24 @@ export function renderGame(container) {
             }
           },
           () => {
-            if (isHost()) handleTimerExpiry();
+            if (isHost()) {
+              handleTimerExpiry();
+            } else {
+              // Watchdog: if host hasn't finalized within 5s, lowest-UID non-host steps in
+              const activePlayers = getActivePlayers();
+              const nonHostUids = activePlayers
+                .filter((p) => p.uid !== room.host)
+                .map((p) => p.uid)
+                .sort();
+              if (nonHostUids[0] === uid) {
+                watchdogTimeout = setTimeout(() => {
+                  const currentGame = getGameData();
+                  if (currentGame && !currentGame.result) {
+                    handleTimerExpiry();
+                  }
+                }, 5000);
+              }
+            }
           }
         );
       } else {
@@ -320,7 +338,7 @@ export function renderGame(container) {
 
     const allLocations = getFilteredLocations(room?.settings?.pack || 'all', room?.customLocations);
     const grid = el('div', 'space-y-2');
-    allLocations.forEach((loc, i) => {
+    allLocations.forEach((loc) => {
       const btn = el('button', 'btn-secondary w-full text-left !py-2 text-sm', loc.name);
       btn.addEventListener('click', async () => {
         btn.disabled = true;
@@ -383,10 +401,13 @@ export function renderGame(container) {
 
   render();
   unsub = subscribe(render);
+  const errorUnsub = onError((msg) => showError(container, msg));
 
   return () => {
     if (unsub) unsub();
+    errorUnsub();
     if (stopTimer) stopTimer();
+    if (watchdogTimeout) { clearTimeout(watchdogTimeout); watchdogTimeout = null; }
     if (activeOverlay) {
       if (activeKeyHandler) { document.removeEventListener('keydown', activeKeyHandler); activeKeyHandler = null; }
       activeOverlay.remove(); activeOverlay = null; previousFocus = null;

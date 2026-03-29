@@ -1,7 +1,7 @@
 import { el, renderHeader, renderPlayerList, renderAchievementBadge, showError, copyToClipboard, sanitize } from '../components.js';
 import { getState, subscribe, isHost, getPlayers, getActivePlayers } from '../../game/state.js';
 import { updateSettings, startGame, leaveRoom, closeRoom, addCustomLocation, removeCustomLocation } from '../../game/actions.js';
-import { navigate } from '../../router.js';
+
 import { loadAchievements } from '../../game/achievements.js';
 import { ACHIEVEMENTS } from '../../data/achievements.js';
 import { LIMITS, SETTINGS_DEBOUNCE_MS } from '../../constants.js';

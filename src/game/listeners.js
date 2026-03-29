@@ -75,19 +75,20 @@ export function listenToRoom(roomCode) {
 
 /** Start game-specific listeners (playerRoles + host secrets) */
 function startGameListeners(roomCode) {
+  // Always clean up previous game listeners to prevent leaks on reconnect
+  stopGameListeners();
+
   const { uid } = getState();
 
   // Listen to own role data
-  if (!roleUnsub) {
-    const roleRef = ref(db, `playerRoles/${roomCode}/${uid}`);
-    roleUnsub = onValue(roleRef, (snap) => {
-      setState({ myRole: snap.val() });
-    });
-  }
+  const roleRef = ref(db, `playerRoles/${roomCode}/${uid}`);
+  roleUnsub = onValue(roleRef, (snap) => {
+    setState({ myRole: snap.val() });
+  });
 
   // Host also listens to secrets (for vote/guess evaluation)
   const room = getState().room;
-  if (!secretsUnsub && room?.host === uid) {
+  if (room?.host === uid) {
     const secretsRef = ref(db, `roomSecrets/${roomCode}`);
     secretsUnsub = onValue(secretsRef, (snap) => {
       setState({ roomSecrets: snap.val() });

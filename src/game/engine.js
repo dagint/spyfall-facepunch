@@ -49,12 +49,9 @@ export function pickSpies(playerUids, count = 2) {
  * Assign roles to non-spy players.
  * @param {string[]} playerUids - all player UIDs
  * @param {string|string[]} spyUids - single spy UID or array of spy UIDs
- * @param {number} locationIndex
- * @param {object} [locationObj] - location object (used when locationIndex is -1 for custom)
  * @returns {Object<string, number>} uid → role index (0-7)
  */
-export function assignRoles(playerUids, spyUids, locationIndex, locationObj = null) {
-  const location = locationObj || LOCATIONS[locationIndex];
+export function assignRoles(playerUids, spyUids) {
   const spySet = new Set(Array.isArray(spyUids) ? spyUids : [spyUids]);
   const nonSpy = playerUids.filter((uid) => !spySet.has(uid));
 
@@ -111,7 +108,7 @@ export function buildGameState(playerUids, settings) {
     spyUids = null;
   }
 
-  const roles = assignRoles(playerUids, spyUids ? Object.keys(spyUids) : spyUid, locationIndex, locationIndex === -1 ? location : null);
+  const roles = assignRoles(playerUids, spyUids ? Object.keys(spyUids) : spyUid);
 
   // Codenames
   const codenameStyle = pack === 'tech' ? 'hacker' : 'nato';

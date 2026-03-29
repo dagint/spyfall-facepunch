@@ -1,7 +1,7 @@
-import { el, renderHeader, sanitize, showError } from '../components.js';
+import { el, sanitize, showError } from '../components.js';
 import {
-  db, ref, onValue, query, orderByChild, limitToLast, get, set, update,
-  isCurrentUserAdmin, isAdminEmail, signInWithGoogle, signOutAdmin, getCurrentEmail,
+  db, ref, onValue, query, orderByChild, limitToLast, endBefore, get, update,
+  isAdminEmail, signInWithGoogle, signOutAdmin, getCurrentEmail,
 } from '../../firebase.js';
 import { navigate } from '../../router.js';
 import { iconBarChart, iconPercent, iconClock, iconUsers, iconFolder, iconTrophy, iconHistory as iconHistoryIcon, iconLock } from '../icons.js';
@@ -14,7 +14,6 @@ export function renderAdmin(container) {
   let roomsData = {};
   let activeTab = 'rooms';
   let filterEmail = 'all';
-  let historyPage = 0;
   let leaderboardPage = 0;
   const PAGE_SIZE = 20;
 
@@ -173,7 +172,6 @@ export function renderAdmin(container) {
       adminEmails.map((e) => `<option value="${sanitize(e)}" ${filterEmail === e ? 'selected' : ''}>${sanitize(e)}</option>`).join('');
     select.addEventListener('change', () => {
       filterEmail = select.value;
-      historyPage = 0;
       leaderboardPage = 0;
       renderTabContent();
     });
@@ -181,10 +179,12 @@ export function renderAdmin(container) {
     return wrap;
   }
 
-  function renderTabContent() {
+  async function renderTabContent() {
     content.innerHTML = '';
     content.setAttribute('aria-labelledby', `tab-${activeTab}`);
+
     if (activeTab !== 'rooms') {
+      await ensureHistoryLoaded();
       const filter = renderFilter();
       if (filter) content.appendChild(filter);
     }
@@ -274,10 +274,8 @@ export function renderAdmin(container) {
       return;
     }
 
-    const sorted = [...historyData].sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
-    const pageItems = sorted.slice(historyPage * PAGE_SIZE, (historyPage + 1) * PAGE_SIZE);
-
-    pageItems.forEach((game) => {
+    // historyData is already in descending order from loadHistoryPage
+    historyData.forEach((game) => {
       const card = el('div', 'card mb-3');
       const winner = game.result?.winner || 'unknown';
       const winnerColor = winner === 'spy' ? 'text-rose-400' : 'text-emerald-400';
@@ -323,7 +321,7 @@ export function renderAdmin(container) {
         const toggle = el('button', 'text-xs text-slate-500 hover:text-slate-300 cursor-pointer font-mono underline', 'Show Players');
         const playerList = el('div', 'mt-2 space-y-1 hidden');
 
-        Object.entries(game.players).forEach(([uid, p]) => {
+        Object.entries(game.players).forEach(([_uid, p]) => {
           const isSpy = p.wasSpy;
           const row = el('div', `flex items-center justify-between px-3 py-1.5 rounded text-xs ${isSpy ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-700/30 text-slate-300'}`);
           const nameStr = p.codename ? `${p.codename} // ${p.name}` : p.name;
@@ -382,8 +380,19 @@ export function renderAdmin(container) {
       content.appendChild(card);
     });
 
-    const pager = renderPager(historyPage, sorted.length, (p) => { historyPage = p; renderTabContent(); });
-    if (pager) content.appendChild(pager);
+    if (historyHasMore) {
+      const loadMoreBtn = el('button', 'btn-secondary w-full mt-4 text-sm', 'Load More');
+      loadMoreBtn.addEventListener('click', async () => {
+        loadMoreBtn.disabled = true;
+        loadMoreBtn.textContent = 'Loading...';
+        await loadHistoryPage();
+        renderTabContent();
+      });
+      content.appendChild(loadMoreBtn);
+    } else if (historyData.length > 0) {
+      const endMsg = el('div', 'text-center text-xs text-slate-500 mt-4 font-mono', `${historyData.length} games loaded`);
+      content.appendChild(endMsg);
+    }
   }
 
   // ===== Stats =====
@@ -502,7 +511,7 @@ export function renderAdmin(container) {
     historyData.forEach((game) => {
       if (!game.players) return;
       const winner = game.result?.winner;
-      Object.entries(game.players).forEach(([uid, p]) => {
+      Object.entries(game.players).forEach(([_uid, p]) => {
         const name = (p.name || 'Unknown').trim().toLowerCase();
         if (!playerStats[name]) {
           playerStats[name] = { displayName: p.name, games: 0, spyGames: 0, spyWins: 0, playerWins: 0 };
@@ -562,14 +571,52 @@ export function renderAdmin(container) {
   });
   unsubs.push(roomsUnsub);
 
-  // Listen to game history
-  const historyRef = query(ref(db, 'gameHistory'), orderByChild('completedAt'), limitToLast(200));
-  const historyUnsub = onValue(historyRef, (snap) => {
-    const val = snap.val();
-    historyData = val ? Object.values(val) : [];
-    if (activeTab !== 'rooms') renderTabContent();
-  });
-  unsubs.push(historyUnsub);
+  // Fetch game history on demand (paginated)
+  let historyLoaded = false;
+  let historyHasMore = true;
+  let historyOldestTs = null;
+  let historyLoading = false;
+
+  async function loadHistoryPage(reset = false) {
+    if (historyLoading) return;
+    historyLoading = true;
+    try {
+      const constraints = [orderByChild('completedAt'), limitToLast(PAGE_SIZE + 1)];
+      if (!reset && historyOldestTs != null) {
+        constraints.push(endBefore(historyOldestTs));
+      }
+      if (reset) {
+        historyData = [];
+        historyOldestTs = null;
+        historyHasMore = true;
+      }
+      const snap = await get(query(ref(db, 'gameHistory'), ...constraints));
+      const val = snap.val();
+      const entries = val ? Object.values(val) : [];
+      entries.sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
+
+      if (entries.length > PAGE_SIZE) {
+        historyHasMore = true;
+        entries.length = PAGE_SIZE;
+      } else {
+        historyHasMore = false;
+      }
+
+      if (entries.length > 0) {
+        historyOldestTs = entries[entries.length - 1].completedAt;
+      }
+      historyData = [...historyData, ...entries];
+      historyLoaded = true;
+    } catch (err) {
+      console.warn('Failed to load history:', err);
+    } finally {
+      historyLoading = false;
+    }
+  }
+
+  async function ensureHistoryLoaded() {
+    if (!historyLoaded) await loadHistoryPage(true);
+  }
 
   // Initial render
   renderTabContent();

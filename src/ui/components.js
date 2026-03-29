@@ -1,7 +1,7 @@
 import { formatTime } from '../utils/timer.js';
 import { getRandomPrompts } from '../data/prompts.js';
 import { isMuted, setMuted, play } from '../audio/sounds.js';
-import { ANIMATION } from '../constants.js';
+import { ANIMATION, EVENT_TYPE } from '../constants.js';
 import { playerAvatar } from './icons.js';
 
 /** Sanitize a string for safe insertion into innerHTML */
@@ -253,22 +253,37 @@ export function renderAchievementToast(achievement) {
   const toast = el('div', 'fixed bottom-4 right-4 z-50 card border-amber-500/50 bg-slate-800 shadow-lg max-w-xs');
   toast.setAttribute('role', 'alert');
   toast.style.animation = 'fadeIn 0.3s ease-out';
+
+  let dismissed = false;
+  let autoTimer = null;
+  const dismissToast = () => {
+    if (dismissed) return;
+    dismissed = true;
+    clearTimeout(autoTimer);
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s';
+    setTimeout(() => toast.remove(), 300);
+    document.removeEventListener('keydown', keyHandler);
+  };
+
   toast.innerHTML = `
     <div class="flex items-center gap-3">
       <span class="text-2xl">${sanitize(achievement.icon)}</span>
-      <div>
+      <div class="flex-1">
         <div class="text-xs text-amber-400 uppercase tracking-wider font-mono">Achievement Unlocked</div>
         <div class="text-sm font-bold text-slate-100">${sanitize(achievement.name)}</div>
         <div class="text-xs text-slate-400">${sanitize(achievement.desc)}</div>
       </div>
+      <button class="text-slate-500 hover:text-white cursor-pointer text-lg leading-none" aria-label="Dismiss">&times;</button>
     </div>
   `;
+  toast.querySelector('button').addEventListener('click', dismissToast);
+
+  const keyHandler = (e) => { if (e.key === 'Escape') dismissToast(); };
+  document.addEventListener('keydown', keyHandler);
+
   document.body.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transition = 'opacity 0.3s';
-    setTimeout(() => toast.remove(), 300);
-  }, ANIMATION.ACHIEVEMENT_TOAST_DURATION);
+  autoTimer = setTimeout(dismissToast, ANIMATION.ACHIEVEMENT_TOAST_DURATION);
   return toast;
 }
 
@@ -292,17 +307,17 @@ export function renderTimeline(events, startedAt, players, codenames) {
   });
 
   const typeColors = {
-    vote: 'bg-amber-400',
-    spy_guess: 'bg-rose-400',
-    majority: 'bg-emerald-400',
-    timeout: 'bg-slate-400',
+    [EVENT_TYPE.VOTE]: 'bg-amber-400',
+    [EVENT_TYPE.SPY_GUESS]: 'bg-rose-400',
+    [EVENT_TYPE.MAJORITY]: 'bg-emerald-400',
+    [EVENT_TYPE.TIMEOUT]: 'bg-slate-400',
   };
 
   const typeLabels = {
-    vote: 'VOTE',
-    spy_guess: 'SPY GUESS',
-    majority: 'MAJORITY',
-    timeout: 'TIMEOUT',
+    [EVENT_TYPE.VOTE]: 'VOTE',
+    [EVENT_TYPE.SPY_GUESS]: 'SPY GUESS',
+    [EVENT_TYPE.MAJORITY]: 'MAJORITY',
+    [EVENT_TYPE.TIMEOUT]: 'TIMEOUT',
   };
 
   events.forEach((evt) => {
@@ -316,13 +331,13 @@ export function renderTimeline(events, startedAt, players, codenames) {
     const timeStr = `T+${mins}:${secs.toString().padStart(2, '0')}`;
 
     let desc = '';
-    if (evt.type === 'vote') {
+    if (evt.type === EVENT_TYPE.VOTE) {
       desc = `${sanitize(playerMap[evt.actor] || 'Unknown')} voted for ${sanitize(playerMap[evt.target] || 'Unknown')}`;
-    } else if (evt.type === 'spy_guess') {
+    } else if (evt.type === EVENT_TYPE.SPY_GUESS) {
       desc = `${sanitize(playerMap[evt.actor] || 'Unknown')} guessed "${sanitize(evt.guessedLocation || 'a location')}"`;
-    } else if (evt.type === 'majority') {
+    } else if (evt.type === EVENT_TYPE.MAJORITY) {
       desc = `Majority reached against ${sanitize(playerMap[evt.target] || 'Unknown')}`;
-    } else if (evt.type === 'timeout') {
+    } else if (evt.type === EVENT_TYPE.TIMEOUT) {
       desc = 'Time expired';
     }
 

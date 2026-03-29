@@ -14,6 +14,7 @@ import {
   query,
   orderByChild,
   limitToLast,
+  endBefore,
 } from 'firebase/database';
 import {
   getAuth,
@@ -114,4 +115,5 @@ export {
   query,
   orderByChild,
   limitToLast,
+  endBefore,
 };

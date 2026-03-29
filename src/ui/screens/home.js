@@ -1,4 +1,4 @@
-import { el, showError, sanitize } from '../components.js';
+import { showError, sanitize } from '../components.js';
 import { createRoom, joinRoom } from '../../game/actions.js';
 import { isValidRoomCode, normalizeRoomCode } from '../../utils/roomCode.js';
 import { navigate } from '../../router.js';

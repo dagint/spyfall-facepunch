@@ -59,6 +59,7 @@
 
     "gameHistory": {
       ".read": "auth != null && auth.token.email != null && auth.token.email_verified === true",
+      ".indexOn": ["completedAt"],
       "$gameId": {
         ".write": "auth != null && !data.exists() && root.child('rooms').child(newData.child('roomCode').val()).child('hostedByAdmin').val() === true",
         ".validate": "newData.hasChildren(['roomCode', 'completedAt', 'result'])"

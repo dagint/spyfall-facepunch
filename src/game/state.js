@@ -42,6 +42,27 @@ export function subscribe(fn) {
   return () => listeners.delete(fn);
 }
 
+// Error event emitter — lets background actions surface errors to the active screen
+const errorListeners = new Set();
+
+/**
+ * Emit an error message to any listening UI screen.
+ * @param {string} message
+ */
+export function emitError(message) {
+  errorListeners.forEach((fn) => fn(message));
+}
+
+/**
+ * Subscribe to error events. Returns an unsubscribe function.
+ * @param {function} fn - callback invoked with error message string
+ * @returns {function} unsubscribe function
+ */
+export function onError(fn) {
+  errorListeners.add(fn);
+  return () => errorListeners.delete(fn);
+}
+
 // Convenience getters
 
 /**

@@ -1,4 +1,4 @@
-import { el, renderHeader, wrapRedacted, renderTimeline, renderAchievementToast, renderMuteToggle, sanitize } from '../components.js';
+import { el, wrapRedacted, renderTimeline, renderAchievementToast, renderMuteToggle, sanitize } from '../components.js';
 import { getState, subscribe, isHost, getPlayers, getGameData } from '../../game/state.js';
 import { playAgain, leaveRoom } from '../../game/actions.js';
 import { LOCATIONS } from '../../data/locations.js';
